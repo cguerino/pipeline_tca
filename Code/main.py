@@ -76,6 +76,7 @@ trials_to_drop = prepro.trials_to_drop(acti, args.cutoff, args.thres, args.verbo
 acti = np.delete(acti, trials_to_drop, 2)
 f0_fin = np.delete(f0, trials_to_drop, 1)
 beh_mat = np.delete(beh_mat, trials_to_drop, 0)
+meta_df = meta_df.drop([meta_df.index[i] for i in trials_to_drop])
 
 if args.verbose: print('We delete {0} trials because of NaN'.format(len(trials_to_drop)))
 
@@ -83,11 +84,8 @@ if args.verbose: print('We delete {0} trials because of NaN'.format(len(trials_t
 interpolated_acti, drop_roi = prepro.interpolation(acti, args.verbose)
 
 # Plots for data exploration
-if args.plotting: plot.potential_outliers(f0, flags, acti)
 if args.plotting: plot.normalized_intensity(acti, interpolated_acti)
 if args.plotting: plot.explore_integrity(interpolated_acti)
-if args.plotting: plot.explore_unreal_roi(bigflag, roi_tensor)
-if args.plotting: plot.plot_flagged_roi(flag_roi)
 
 # Delete remaining ROIs that were not affected by interpolation 
 interpolated_acti = np.delete(interpolated_acti, drop_roi, 0)
@@ -96,7 +94,12 @@ roi_tensor = np.delete(roi_tensor, drop_roi, 2)
 if args.verbose: print('We delete {0} ROI because of NaN'.format(len(drop_roi)))
 
 # Flag roi that still contain NaNs
-flag_roi, flag_trial, bigflag = prepro.clean_messy_ROIs(interpolated_acti, args.tol)
+flag_roi, flag_trial, flags = prepro.clean_messy_ROIs(interpolated_acti, args.tol)
+
+# Plots to explore
+if args.plotting: plot.potential_outliers(f0, flags, acti)
+if args.plotting: plot.explore_unreal_roi(flags, roi_tensor)
+if args.plotting: plot.plot_flagged_roi(f0, flag_roi)
 
 # Delete such ROIs
 interpolated_acti = np.delete(interpolated_acti, flag_roi, 0)
@@ -110,5 +113,5 @@ color_df = data.generate_color_df(beh_mat)
 # if args.plotting: plot.behaviorgram(raw_beh, trials_to_drop)
 
 # Save processed data in a folder
-data.save_data(interpolated_acti, flag_roi, trials_to_drop, roi_tensor, color_df, params.animal_list[args.animal])
+data.save_data(interpolated_acti, flag_roi, trials_to_drop, roi_tensor, meta_df, color_df, params.animal_list[args.animal])
 

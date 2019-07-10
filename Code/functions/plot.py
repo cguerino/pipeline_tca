@@ -1,3 +1,4 @@
+import os
 import itertools
 import numpy as np
 import pandas as pd
@@ -7,9 +8,11 @@ import matplotlib.pyplot as plt
 from functions import tca_utils as tca
 from functions import settings as sett
 
+paths = sett.paths()
+
 
 def map_of_rois(acti, roi_tensor):
-
+	N, T, K = acti.shape
 	plt.imshow(tca.make_map(roi_tensor, np.ones(roi_tensor.shape[2])), cmap='hot')
 
 	fig = plt.figure(figsize=(12,12))
@@ -61,11 +64,12 @@ def nan_ivestigation():
 	plt.hist(non_zero_nans_trial, bins=40)
 	plt.xlabel('Number of NaN')
 
-	plt.savefig(os.path.join(paths.path2Figures, 'map_of_rois.png'))
+	plt.savefig(os.path.join(paths.path2Figures, 'nan_ivestigation.png'))
 
 
 
 def normalized_intensity(acti, interpolated_acti):
+	N, T, K = interpolated_acti.shape
 	# Illustration with some well chosen example
 	nan_per_trial = pd.Series(np.isnan(acti[0,:,:]).sum(axis = 0), index = range(K))
 	roi = nan_per_trial.sort_values(ascending = False).index[1]
@@ -78,7 +82,7 @@ def normalized_intensity(acti, interpolated_acti):
 	plt.ylabel('Normalized fluorescence intensity')
 	plt.legend()
 
-	plt.savefig(os.path.join(paths.path2Figures, 'map_of_rois.png'))
+	plt.savefig(os.path.join(paths.path2Figures, 'normalized_intensity.png'))
 
 
 def explore_integrity(interpolated_acti):
@@ -118,7 +122,8 @@ def explore_integrity(interpolated_acti):
 	plt.title('Trials lost')
 	plt.xlabel('Threshold')
 	plt.ylabel('Number of trials')
-	plt.show()
+	plt.savefig(os.path.join(paths.path2Figures, 'explore_integrity1.png'))
+
 
 	fig = plt.figure(figsize = (25,15))
 
@@ -134,7 +139,7 @@ def explore_integrity(interpolated_acti):
 	plt.xlabel('Trials', {'fontsize': 'large', 'fontweight' : 'roman'})
 	plt.ylabel('ROI', {'fontsize': 'large', 'fontweight' : 'roman'})
 
-	plt.savefig(os.path.join(paths.path2Figures, 'map_of_rois.png'))
+	plt.savefig(os.path.join(paths.path2Figures, 'explore_integrity2.png'))
 
 def potential_outliers(f0, flags, acti):
 	N, T, K = acti.shape
@@ -152,13 +157,14 @@ def potential_outliers(f0, flags, acti):
 	plt.xlabel('Trials', {'fontsize': 'large', 'fontweight' : 'roman'})
 	plt.ylabel('ROI', {'fontsize': 'large', 'fontweight' : 'roman'})
 
-	plt.savefig(os.path.join(paths.path2Figures, 'map_of_rois.png'))
+	plt.savefig(os.path.join(paths.path2Figures, 'potential_outliers.png'))
 
 def explore_unreal_roi(big_flag, roi_tensor):
 	blob = big_flag.sum(axis=1)
 	plt.imshow(tca.make_map(roi_tensor, blob), cmap='hot')
+	plt.savefig(os.path.join(paths.path2Figures, 'explore_unreal_roi.png'))
 
-def plot_flagged_roi(flag_roi):
+def plot_flagged_roi(f0, flag_roi):
 	width = 30
 	height = 20
 	assert width * height >= len(flag_roi), 'Increase number of subplots'
@@ -166,7 +172,7 @@ def plot_flagged_roi(flag_roi):
 	for i, roi in enumerate(flag_roi):
 	    fig.add_subplot(width, height, i+1)
 	    plt.plot(f0[roi,:])
-	plt.savefig(os.path.join(paths.path2Figures, 'map_of_rois.png'))
+	plt.savefig(os.path.join(paths.path2Figures, 'plot_flagged_roi.png'))
 
 
 def behaviogram(raw_beh, trials_to_drop):

@@ -16,7 +16,6 @@ def load_data(animal, selection, verbose):
 	meta_df = pd.read_csv(os.path.join(path_raw, 'meta_df.csv'), index_col=0)
 
 	for param in selection:
-		print(param)
 		if selection[param] != None:
 			meta_df = meta_df[meta_df[param].isin(selection[param])]
 
@@ -52,7 +51,7 @@ def load_data(animal, selection, verbose):
 
 	return meta_df, roi_tensor, acti, beh_mat, f0, trials_of_interest
 
-def save_data(interpolated_acti, flag_roi, drop_trial, roi_tensor, color_df, animal):
+def save_data(interpolated_acti, flag_roi, drop_trial, roi_tensor, meta_df, color_df, animal):
 	# assert beh_mat.shape[0] + len(drop_trial) == raw_beh_mat.shape[0]
 	# assert b[1][-1][1] == beh_mat.shape[0]
 
@@ -66,6 +65,7 @@ def save_data(interpolated_acti, flag_roi, drop_trial, roi_tensor, color_df, ani
 	np.save(os.path.join(path,'flag_roi'), flag_roi)
 	np.save(os.path.join(path,'drop_trial'), drop_trial)
 	np.save(os.path.join(path,'roi_tensor'), roi_tensor)
+	np.save(os.path.join(path,'meta_df'), meta_df)
 	# np.save(os.path.join(path,'behaviorgram'), b)
 	color_df.to_csv(os.path.join('color_df.csv'))
 
