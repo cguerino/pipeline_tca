@@ -863,7 +863,7 @@ def factorplot(factors, roi_tensor, meta_df, animal, name, selection, arguments,
 		plt.savefig(path)
 
 	# display figure
-	configuration = pd.concat([pd.DataFrame(arguments), pd.DataFrame(selection)])
+	configuration = pd.concat([pd.DataFrame(arguments, index=[0]), pd.DataFrame(selection, index[0])], axis=1)
 	configuration.to_csv(os.path.join(paths.path2Figures, animal, name, 'configuration.csv'))
 	plt.savefig(os.path.join(paths.path2Figures, animal, name, 'factorplot.png'))
 

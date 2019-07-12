@@ -52,7 +52,7 @@ def load_data(animal, selection, verbose):
 	return meta_df, roi_tensor, acti, beh_mat, f0, trials_of_interest
 
 def save_data(interpolated_acti, flag_roi, drop_trial, roi_tensor, meta_df, animal, name, arguments, selection):
-	configuration = pd.concat([pd.DataFrame(arguments), pd.DataFrame(selection)])
+	configuration = pd.concat([pd.DataFrame(arguments, index=[0]), pd.DataFrame(selection, index=[0])], axis=1)
 	configuration.to_csv(os.path.join(paths.path2Output, animal, name, 'configuration.csv'))
 	
 	path = os.path.join(paths.path2Output, animal, name)
