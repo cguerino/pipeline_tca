@@ -59,12 +59,6 @@ def clean_messy_ROIs(interpolated_acti, tol):
 	return flag_roi, flag_trial, big_flag
 
 
-def behaviogram(raw_beh, trials_to_drop):
-	'''function in contruction'''
-	b = tca.behaviorgram(raw_beh_mat, trials_to_drop)
-
-	return b
-
 def normalize_acti(acti):
 	N, T, K = acti.shape
 	norm_acti = np.zeros_like(acti)
@@ -75,3 +69,5 @@ def normalize_acti(acti):
 	        norm_acti[n,t,:] = np.divide(acti[n,t,:] + 1, max_amp + 1)
 
 	return norm_acti
+
+

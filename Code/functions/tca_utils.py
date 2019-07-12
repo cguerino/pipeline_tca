@@ -23,6 +23,9 @@ from sklearn.metrics import r2_score
 import scipy as sci
 import seaborn as sns
 import statannot as sta
+import time
+
+import torch
 
 
 from functions import settings as sett
@@ -759,6 +762,7 @@ def factorplot(factors, roi_tensor, meta_df, balance=True, color='k', shaded=Non
 
 		## plot neuron factors on the ROI map
 		# generate the image with ROI binary tensor and neuron factors
+
 		roi_map = make_map(roi_tensor, factors[0][:, r])
 		# plot as an image, beware normalized colormap
 		axarr[r, 0].imshow(roi_map, vmin=0, vmax=np.max(factors[0]), cmap='hot')
@@ -975,162 +979,156 @@ def factorplot_singlecomp(factors, roi_tensor, b=None, balance=True, color='k', 
 	plt.show()
 
 
-def custom_initialize_factors(tensor, rank, init='svd', svd='numpy_svd', random_state=None, non_negative=False):
-    r"""Initialize factors used in `parafac`.
+def custom_initialize_factors(tensor, rank, init='svd', svd='numpy_svd', neg_fac=0, random_state=None, non_negative=False):
+	r"""Initialize factors used in `parafac`.
 
-    The type of initialization is set using `init`. If `init == 'random'` then
-    initialize factor matrices using `random_state`. If `init == 'svd'` then
-    initialize the `m`th factor matrix using the `rank` left singular vectors
-    of the `m`th unfolding of the input tensor.
+	The type of initialization is set using `init`. If `init == 'random'` then
+	initialize factor matrices using `random_state`. If `init == 'svd'` then
+	initialize the `m`th factor matrix using the `rank` left singular vectors
+	of the `m`th unfolding of the input tensor.
 
-    Parameters
-    ----------
-    tensor : ndarray
-    rank : int
-    init : {'svd', 'random'}, optional
-    svd : str, default is 'numpy_svd'
-        function to use to compute the SVD, acceptable values in tensorly.SVD_FUNS
-    non_negative : bool, default is False
-        if True, non-negative factors are returned
+	Parameters
+	----------
+	tensor : ndarray
+	rank : int
+	init : {'svd', 'random'}, optional
+	svd : str, default is 'numpy_svd'
+		function to use to compute the SVD, acceptable values in tensorly.SVD_FUNS
+	non_negative : bool, default is False
+		if True, non-negative factors are returned
 
-    Returns
-    -------
-    factors : ndarray list
-        List of initialized factors of the CP decomposition where element `i`
-        is of shape (tensor.shape[i], rank)
+	Returns
+	-------
+	factors : ndarray list
+		List of initialized factors of the CP decomposition where element `i`
+		is of shape (tensor.shape[i], rank)
 
-    """
-    rng = tl.random.check_random_state(random_state)
+	"""
+	rng = tl.random.check_random_state(random_state)
 
-    if init == 'random':
-        factors = [tl.tensor(rng.random_sample((tensor.shape[i], rank)), **tl.context(tensor)) for i in range(tl.ndim(tensor))]
-        custom_factors = [f if i == 0 else tl.abs(f) for i, f in enumerate(factors)]
+	if init == 'random':
+		factors = [tl.tensor(rng.random_sample((tensor.shape[i], rank)), **tl.context(tensor)) for i in range(tl.ndim(tensor))]
+		custom_factors = [f if i == neg_fac else tl.abs(f) for i, f in enumerate(factors)]
 
-    elif init == 'svd':
-        try:
-            svd_fun = tl.SVD_FUNS[svd]
-        except KeyError:
-            message = 'Got svd={}. However, for the current backend ({}), the possible choices are {}'.format(
-                    svd, tl.get_backend(), tl.SVD_FUNS)
-            raise ValueError(message)
+	elif init == 'svd':
+		try:
+			svd_fun = tl.SVD_FUNS[svd]
+		except KeyError:
+			message = 'Got svd={}. However, for the current backend ({}), the possible choices are {}'.format(
+					svd, tl.get_backend(), tl.SVD_FUNS)
+			raise ValueError(message)
 
-        factors = []
-        for mode in range(tl.ndim(tensor)):
-            U, _, _ = svd_fun(tl.base.unfold(tensor, mode), n_eigenvecs=rank)
+		factors = []
+		for mode in range(tl.ndim(tensor)):
+			U, _, _ = svd_fun(tl.base.unfold(tensor, mode), n_eigenvecs=rank)
 
-            if tensor.shape[mode] < rank:
-                # TODO: this is a hack but it seems to do the job for now
-                # factor = tl.tensor(np.zeros((U.shape[0], rank)), **tl.context(tensor))
-                # factor[:, tensor.shape[mode]:] = tl.tensor(rng.random_sample((U.shape[0], rank - tl.shape(tensor)[mode])), **tl.context(tensor))
-                # factor[:, :tensor.shape[mode]] = U
-                random_part = tl.tensor(rng.random_sample((U.shape[0], rank - tl.shape(tensor)[mode])), **tl.context(tensor))
-                U = tl.concatenate([U, random_part], axis=1)
-            
-            if mode == 0:
-                factors.append(U[:, :rank])
-            else:
-                 factors.append(tl.abs(U[:, :rank]))
-        return factors
+			if tensor.shape[mode] < rank:
+				# TODO: this is a hack but it seems to do the job for now
+				# factor = tl.tensor(np.zeros((U.shape[0], rank)), **tl.context(tensor))
+				# factor[:, tensor.shape[mode]:] = tl.tensor(rng.random_sample((U.shape[0], rank - tl.shape(tensor)[mode])), **tl.context(tensor))
+				# factor[:, :tensor.shape[mode]] = U
+				random_part = tl.tensor(rng.random_sample((U.shape[0], rank - tl.shape(tensor)[mode])), **tl.context(tensor))
+				U = tl.concatenate([U, random_part], axis=1)
+			
+			if mode == neg_fac:
+				factors.append(U[:, :rank])
+			else:
+				 factors.append(tl.abs(U[:, :rank]))
+		return factors
 
-    raise ValueError('Initialization method "{}" not recognized'.format(init))
+	raise ValueError('Initialization method "{}" not recognized'.format(init))
 
 def custom_parafac(tensor, rank, n_iter_max=100, init='svd', svd='numpy_svd', tol=1e-8,
-            orthogonalise=False, random_state=None, verbose=False, return_errors=False):
-    """CANDECOMP/PARAFAC decomposition via alternating least squares (ALS)
+			orthogonalise=False, random_state=None, verbose=False, return_errors=False, neg_fac=0):
+	"""CANDECOMP/PARAFAC decomposition via alternating least squares (ALS)
 
-    Computes a rank-`rank` decomposition of `tensor` [1]_ such that,
+	Computes a rank-`rank` decomposition of `tensor` [1]_ such that,
 
-        ``tensor = [| factors[0], ..., factors[-1] |]``.
+		``tensor = [| factors[0], ..., factors[-1] |]``.
 
-    Parameters
-    ----------
-    tensor : ndarray
-    rank  : int
-        Number of components.
-    n_iter_max : int
-        Maximum number of iteration
-    init : {'svd', 'random'}, optional
-        Type of factor matrix initialization. See `initialize_factors`.
-    svd : str, default is 'numpy_svd'
-        function to use to compute the SVD, acceptable values in tensorly.SVD_FUNS
-    tol : float, optional
-        (Default: 1e-6) Relative reconstruction error tolerance. The
-        algorithm is considered to have found the global minimum when the
-        reconstruction error is less than `tol`.
-    random_state : {None, int, np.random.RandomState}
-    verbose : int, optional
-        Level of verbosity
-    return_errors : bool, optional
-        Activate return of iteration errors
+	Parameters
+	----------
+	tensor : ndarray
+	rank  : int
+		Number of components.
+	n_iter_max : int
+		Maximum number of iteration
+	init : {'svd', 'random'}, optional
+		Type of factor matrix initialization. See `initialize_factors`.
+	svd : str, default is 'numpy_svd'
+		function to use to compute the SVD, acceptable values in tensorly.SVD_FUNS
+	tol : float, optional
+		(Default: 1e-6) Relative reconstruction error tolerance. The
+		algorithm is considered to have found the global minimum when the
+		reconstruction error is less than `tol`.
+	random_state : {None, int, np.random.RandomState}
+	verbose : int, optional
+		Level of verbosity
+	return_errors : bool, optional
+		Activate return of iteration errors
 
 
-    Returns
-    -------
-    factors : ndarray list
-        List of factors of the CP decomposition element `i` is of shape
-        (tensor.shape[i], rank)
-    errors : list
-        A list of reconstruction errors at each iteration of the algorithms.
+	Returns
+	-------
+	factors : ndarray list
+		List of factors of the CP decomposition element `i` is of shape
+		(tensor.shape[i], rank)
+	errors : list
+		A list of reconstruction errors at each iteration of the algorithms.
 
-    References
-    ----------
-    .. [1] tl.G.Kolda and B.W.Bader, "Tensor Decompositions and Applications",
-       SIAM REVIEW, vol. 51, n. 3, pp. 455-500, 2009.
-    """
-    # if orthogonalise and not isinstance(orthogonalise, int):
-    #     orthogonalise = n_iter_max
+	References
+	----------
+	.. [1] tl.G.Kolda and B.W.Bader, "Tensor Decompositions and Applications",
+	   SIAM REVIEW, vol. 51, n. 3, pp. 455-500, 2009.
+	"""
+	# if orthogonalise and not isinstance(orthogonalise, int):
+	#     orthogonalise = n_iter_max
+	factors = custom_initialize_factors(tensor, rank, neg_fac=neg_fac, init=init, svd=svd, random_state=random_state)
+	rec_errors = []
+	norm_tensor = tl.norm(tensor, 2)
+	epsilon = 10e-12
+	
+	for iteration in range(n_iter_max):
+		for mode in range(tl.ndim(tensor)):
+			if mode == neg_fac:
+				pseudo_inverse = tl.tensor(np.ones((rank, rank)), **tl.context(tensor))
+				for i, factor in enumerate(factors):
+					if i != mode:
+						pseudo_inverse = pseudo_inverse*tl.dot(tl.transpose(factor), factor)
+			   
+				factor = tl.dot(tl.base.unfold(tensor, mode), tl.tenalg.khatri_rao(factors, skip_matrix=mode))
+				factor = tl.transpose(tl.solve(tl.transpose(pseudo_inverse), tl.transpose(factor)))
+				factors[mode] = factor
+			else:
+				sub_indices = [i for i, j in enumerate(factors) if i != mode]
+				for i, e in enumerate(sub_indices):
+					if i:
+						accum = accum*tl.dot(tl.transpose(factors[e]), factors[e])
+					else:
+						accum = tl.dot(tl.transpose(factors[e]), factors[e])
 
-    factors = custom_initialize_factors(tensor, rank, init=init, svd=svd, random_state=random_state)
-    rec_errors = []
-    norm_tensor = tl.norm(tensor, 2)
-    epsilon = 10e-12
+				numerator = tl.dot(tl.base.unfold(tensor, mode), tl.tenalg.khatri_rao(factors, skip_matrix=mode))
+				numerator = tl.clip(numerator, a_min=epsilon, a_max=None)
+				denominator = tl.dot(factors[mode], accum)
+				denominator = tl.clip(denominator, a_min=epsilon, a_max=None)
+				factors[mode] = factors[mode]* numerator / denominator
+		if tol:
+			rec_error = tl.norm(tensor - tl.kruskal_tensor.kruskal_to_tensor(factors), 2) / norm_tensor
+			rec_errors.append(rec_error)
 
-    for iteration in range(n_iter_max):
-        # if orthogonalise and iteration <= orthogonalise:
-        #     factor = [tl.qr(factor)[0] for factor in factors]
+			if iteration > 1:
+				if verbose:
+					print('reconstruction error={}, variation={}.'.format(
+					    rec_errors[-1], rec_errors[-2] - rec_errors[-1]))
 
-        for mode in range(tl.ndim(tensor)):
-            if mode == 0:
-                pseudo_inverse = tl.tensor(np.ones((rank, rank)), **tl.context(tensor))
-                for i, factor in enumerate(factors):
-                    if i != mode:
-                        pseudo_inverse = pseudo_inverse*tl.dot(tl.transpose(factor), factor)
-               
-                factor = tl.dot(tl.base.unfold(tensor, mode), tl.tenalg.khatri_rao(factors, skip_matrix=mode))
-                factor = tl.transpose(tl.solve(tl.transpose(pseudo_inverse), tl.transpose(factor)))
-                factors[mode] = factor
-            else:
-                sub_indices = [i for i, j in enumerate(factors) if i != mode]
-                for i, e in enumerate(sub_indices):
-                    if i:
-                        accum = accum*tl.dot(tl.transpose(factors[e]), factors[e])
-                    else:
-                        accum = tl.dot(tl.transpose(factors[e]), factors[e])
+				if tol and abs(rec_errors[-2] - rec_errors[-1]) < tol:
+					if verbose:
+						print('converged in {} iterations.'.format(iteration))
+					break
+	np.save(os.path.join(os.sep, 'X:' + os.sep, 'Antonin', 'Pipeline', 'Output', 'rank{0}_factors'.format(rank)), factors)
+	np.save(os.path.join(os.sep, 'X:' + os.sep, 'Antonin', 'Pipeline', 'Output', 'rank{0}_errors'.format(rank)), rec_errors)
 
-                numerator = tl.dot(tl.base.unfold(tensor, mode), tl.tenalg.khatri_rao(factors, skip_matrix=mode))
-                numerator = tl.clip(numerator, a_min=epsilon, a_max=None)
-                denominator = tl.dot(factors[mode], accum)
-                denominator = tl.clip(denominator, a_min=epsilon, a_max=None)
-                factors[mode] = factors[mode]* numerator / denominator
-
-        if tol:
-            rec_error = tl.norm(tensor - tl.kruskal_tensor.kruskal_to_tensor(factors), 2) / norm_tensor
-            rec_errors.append(rec_error)
-
-            if iteration > 1:
-                if verbose:
-                    print('reconstruction error={}, variation={}.'.format(
-                        rec_errors[-1], rec_errors[-2] - rec_errors[-1]))
-
-                if tol and abs(rec_errors[-2] - rec_errors[-1]) < tol:
-                    if verbose:
-                        print('converged in {} iterations.'.format(iteration))
-                    break
-    
-    np.save(os.path.join(os.sep, 'X:' + os.sep, 'Antonin', 'Pipeline', 'Output', 'rank{0}_factors'.format(rank)), factors)
-    np.save(os.path.join(os.sep, 'X:' + os.sep, 'Antonin', 'Pipeline', 'Output', 'rank{0}_errors'.format(rank)), rec_errors)
-
-    if return_errors:
-        return factors, rec_errors
-    else:
-        return factors
+	if return_errors:
+		return factors, rec_errors
+	else:
+		return factors

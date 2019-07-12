@@ -3,6 +3,7 @@ import argparse
 import numpy as np
 import pandas as pd
 
+import tensorly as tl
 from functions import plot
 from functions import data
 from functions import preprocessing as prepro
@@ -16,8 +17,12 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import cross_val_score
 from sklearn.preprocessing import StandardScaler
 
+import torch
 
 import itertools
+
+tl.set_backend('pytorch')
+torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
 params = sett.params()
 paths = sett.paths()
@@ -142,9 +147,13 @@ if args.computation:
 	norm_acti = prepro.normalize_acti(acti)
 
 	assert roi_tensor.shape[2] == norm_acti.shape[0]
+ 	
+	norm_acti = torch.tensor(norm_acti)
 
 	factors, rec_errors = tca.custom_parafac(norm_acti, args.rank, n_iter_max=10000, tol=1e-07, 
-											  verbose=1, return_errors=True)
+											  verbose=1, return_errors=True, neg_fac=1)
+
+	factors = [f.cpu().numpy() for f in factors]
 
 	X, y_odor, y_rew = shuffle(factors[2], meta_df['Odor'].tolist(), meta_df['Reward'].tolist())
 	clf = RandomForestClassifier(n_estimators=50, max_depth=None, min_samples_split=2, max_features='sqrt')
