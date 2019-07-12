@@ -694,7 +694,7 @@ def seq_parafac(input_tensor, max_rank, nb_trial, pred_df, tol=1e-07, mode='non-
 	return err_df, sim_df, spa_df, odor_df, rew_df
 
 
-def factorplot(factors, roi_tensor, meta_df, balance=True, color='k', shaded=None, order=False, path=None):
+def factorplot(factors, roi_tensor, meta_df, animal, name, selection, arguments, balance=True, color='k', shaded=None, order=False, path=None):
 	"""Display the factors extracted with TCA
 	
 	The TCA extracted factors are represented in 3 columns and as many rows as there are components.
@@ -863,7 +863,9 @@ def factorplot(factors, roi_tensor, meta_df, balance=True, color='k', shaded=Non
 		plt.savefig(path)
 
 	# display figure
-	plt.savefig(os.path.join(paths.path2Figures, 'factorplot.png'))
+	configuration = pd.concat([pd.DataFrame(arguments), pd.DataFrame(selection)])
+	configuration.to_csv(os.path.join(paths.path2Figures, animal, name, 'configuration.csv'))
+	plt.savefig(os.path.join(paths.path2Figures, animal, name, 'factorplot.png'))
 
 	plt.show(fig)
 	
@@ -1125,8 +1127,9 @@ def custom_parafac(tensor, rank, n_iter_max=100, init='svd', svd='numpy_svd', to
 					if verbose:
 						print('converged in {} iterations.'.format(iteration))
 					break
-	np.save(os.path.join(os.sep, 'X:' + os.sep, 'Antonin', 'Pipeline', 'Output', 'rank{0}_factors'.format(rank)), factors)
-	np.save(os.path.join(os.sep, 'X:' + os.sep, 'Antonin', 'Pipeline', 'Output', 'rank{0}_errors'.format(rank)), rec_errors)
+	
+	np.save(os.path.join(paths.path2Output, 'rank{0}_factors'.format(rank)), factors)
+	np.save(os.path.join(paths.path2Output, 'rank{0}_errors'.format(rank)), rec_errors)
 
 	if return_errors:
 		return factors, rec_errors

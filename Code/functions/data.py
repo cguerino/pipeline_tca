@@ -51,8 +51,11 @@ def load_data(animal, selection, verbose):
 
 	return meta_df, roi_tensor, acti, beh_mat, f0, trials_of_interest
 
-def save_data(interpolated_acti, flag_roi, drop_trial, roi_tensor, meta_df, animal):
-	path = os.path.join(paths.path2Output, animal)
+def save_data(interpolated_acti, flag_roi, drop_trial, roi_tensor, meta_df, animal, name, arguments, selection):
+	configuration = pd.concat([pd.DataFrame(arguments), pd.DataFrame(selection)])
+	configuration.to_csv(os.path.join(paths.path2Output, animal, name, 'configuration.csv'))
+	
+	path = os.path.join(paths.path2Output, animal, name)
 	try:
 	    os.mkdir(path)
 	except:
@@ -72,3 +75,10 @@ def load_processed_data(animal):
 	acti = np.load(os.path.join(paths.path2Output, animal,'acti.npy'))
 
 	return meta_df, roi_tensor, acti
+
+def save_results(factors, rec_errors, scores_odor, scores_rew, animal, name):
+
+		np.save(os.path.join(paths.path2Output, animal, name, 'rank{0}_factors'.format(rank)), factors)
+		np.save(os.path.join(paths.path2Output, animal, name, 'rank{0}_errors'.format(rank)), rec_errors)
+		np.save(os.path.join(paths.path2Output, animal, name, 'scores_odor'), scores_odor)
+		np.save(os.path.join(paths.path2Output, animal, name, 'scores_rew'), scores_rew)

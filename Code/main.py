@@ -1,5 +1,8 @@
 import os
+import torch
+import random
 import argparse
+import itertools
 import numpy as np
 import pandas as pd
 
@@ -10,16 +13,10 @@ from functions import preprocessing as prepro
 from functions import settings as sett 
 from functions import tca_utils as tca
 
-from tensorly.decomposition import non_negative_parafac, parafac, custom_parafac
-
 from sklearn.utils import shuffle
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import cross_val_score
 from sklearn.preprocessing import StandardScaler
-
-import torch
-
-import itertools
 
 tl.set_backend('pytorch')
 torch.set_default_tensor_type('torch.cuda.FloatTensor')
@@ -50,6 +47,8 @@ parser.add_argument('--rank', '-r', type=int, default=6,
 					help='Rank of the TCA')
 parser.add_argument('--function', '-f', type=str, default='custom_parafac', 
 					help='TCA function to use: parafac, non_negative_parafac, custom_parafac')
+parser.add_argument('--neg_fac', '-nf', type=str, default=None, 
+					help='Factor of the TCA which is allowed to be negative')
 
 # Select relevant data for processing
 parser.add_argument('--Block', '-B', type=int, nargs='*', default=None, 
@@ -76,21 +75,33 @@ parser.add_argument('--Performance', '-P', type=int, nargs='*', default=None,
 args = parser.parse_args()
 
 animal = params.animal_list[args.animal]
+name = '{}'.format(random.getrandbits(32))
+
+arguments = {
+	'Cut_off': args.cutoff,
+	'Threshold': args.thres,
+	'Animal': args.animal,
+	'Tol': args.tol,
+	'Rank': args.rank,
+	'Function': args.function,
+	'Neg_Fac': args.neg_fac
+}
+
+selection = {
+	'Block':args.Block, 
+	'Odor': args.Odor,
+	'Stimulus': args.Stimulus,
+	'Behavior': args.Behavior,
+	'Reward': args.Reward,
+	'Date': args.Date,
+	'Day': args.Day,
+	'Learning State': args.Learnstate,
+	'Experiment Class': args.Expclass,
+	'Performance': args.Performance
+}
 
 #################################### PREPROCESSING ##########################################
 if args.preprocess:
-	selection = {
-		'Block':args.Block, 
-		'Odor': args.Odor,
-		'Stimulus': args.Stimulus,
-		'Behavior': args.Behavior,
-		'Reward': args.Reward,
-		'Date': args.Date,
-		'Day': args.Day,
-		'Learning State': args.Learnstate,
-		'Experiment Class': args.Expclass,
-		'Performance': args.Performance
-	}
 
 	# Loading data from folder
 	meta_df, roi_tensor, acti, beh_mat, f0, trials_of_interest = data.load_data(animal, 
@@ -137,7 +148,7 @@ if args.preprocess:
 	if args.verbose: print('We delete {0} flagged ROI'.format(len(flag_roi)))
 
 	# Save processed data in a folder
-	data.save_data(interpolated_acti, flag_roi, trials_to_drop, roi_tensor, meta_df, animal)
+	data.save_data(interpolated_acti, flag_roi, trials_to_drop, roi_tensor, meta_df, animal, name, arguments, selection)
 
 #################################### COMPUTATION ##########################################
 if args.computation:
@@ -150,8 +161,19 @@ if args.computation:
  	
 	norm_acti = torch.tensor(norm_acti)
 
-	factors, rec_errors = tca.custom_parafac(norm_acti, args.rank, n_iter_max=10000, tol=1e-07, 
-											  verbose=1, return_errors=True, neg_fac=1)
+
+	if args.function == 'custom_parafac':
+		if args.neg_fac != None:
+			factors, rec_errors = tca.custom_parafac(norm_acti, args.rank, n_iter_max=10000, tol=args.tol, 
+											  verbose=1, return_errors=True, neg_fac=args.neg_fac)
+	elif args.function == 'parafac':
+		factors, rec_errors = tl.parafac(norm_acti, args.rank, n_iter_max=10000, tol=args.tol, 
+											  verbose=1, return_errors=True)
+	elif args.function == 'non_negative_parafac':
+		# return_erros not implemented by default, custom settings
+		factors, rec_errors = tl.non_negative_parafac(norm_acti, args.rank, n_iter_max=10000, tol=args.tol, 
+											  verbose=1, return_errors=True)
+
 
 	factors = [f.cpu().numpy() for f in factors]
 
@@ -161,8 +183,8 @@ if args.computation:
 	scores_odor = cross_val_score(clf, X, y_odor, cv = 8)
 	scores_rew = cross_val_score(clf, X, y_rew, cv = 8)
 
-	print("Odor prediction - Accuracy: %0.2f (+/- %0.2f)" % (scores_odor.mean(), scores_odor.std()))
-	print("Reward prediction - Accuracy: %0.2f (+/- %0.2f)" % (scores_rew.mean(), scores_rew.std()))
+	print("Odor prediction - Accuracy: %0.4f (+/- %0.4f)" % (scores_odor.mean(), scores_odor.std()))
+	print("Reward prediction - Accuracy: %0.4f (+/- %0.4f)" % (scores_rew.mean(), scores_rew.std()))
 
 	tca.factorplot(factors, roi_tensor, meta_df, color=meta_df['Odor Color'].tolist(), balance=True)
 
