@@ -17,3 +17,9 @@ class params():
 				            'yellow',  'pink', 'cyan', 'purple', 'grey',
 				            'grey', 'grey', 'orange', 'green', 'red',
 				            'black', 'blue', 'yellow', 'pink']
+
+		self.convert_beh = {'MISS': 0, 'HIT':1, 'FA': 2, 'CR':3}
+		self.convert_odo = {'40EB 60AA':0, '60EB 40AA': 1, 'Air2': 2, 'CINEOLE': 3, 
+							'ETHYL TIGLATE': 4, 'Min-Limonen': 5, 'VALDEHYDE': 6, 
+							'Air1': 7, 'HEXANONE': 8, '55EB 45AA': 9, 'BUTYRIC ACID': 10, 
+							'45EB 55AA': 11}

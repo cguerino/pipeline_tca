@@ -36,7 +36,6 @@ def interpolation(acti, verbose):
 	    
 	    line_acti[roi,:,:] = df_line_interp.values
 	
-	assert np.isnan(line_acti).sum() == 0
 	return line_acti, drop_roi
 
 def clean_messy_ROIs(interpolated_acti, tol):
@@ -58,3 +57,21 @@ def clean_messy_ROIs(interpolated_acti, tol):
 	flag_trial = list(set(flag_trial))
 	
 	return flag_roi, flag_trial, big_flag
+
+
+def behaviogram(raw_beh, trials_to_drop):
+	'''function in contruction'''
+	b = tca.behaviorgram(raw_beh_mat, trials_to_drop)
+
+	return b
+
+def normalize_acti(acti):
+	N, T, K = acti.shape
+	norm_acti = np.zeros_like(acti)
+	# Get the maximum amplitude across neurons and across time
+	max_amp = np.nanmax(acti, axis = (0,1))
+	for t in range(T):
+	    for n in range(N):
+	        norm_acti[n,t,:] = np.divide(acti[n,t,:] + 1, max_amp + 1)
+
+	return norm_acti

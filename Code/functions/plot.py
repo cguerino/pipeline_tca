@@ -173,9 +173,3 @@ def plot_flagged_roi(f0, flag_roi):
 	    fig.add_subplot(width, height, i+1)
 	    plt.plot(f0[roi,:])
 	plt.savefig(os.path.join(paths.path2Figures, 'plot_flagged_roi.png'))
-
-
-def behaviogram(raw_beh, trials_to_drop):
-	'''function in contruction'''
-	raw_beh_mat = raw_beh['ALLBEHmatrix']
-	learn_color, limit_block, limit_day = tca.behaviorgram(raw_beh_mat, trials_to_drop)
