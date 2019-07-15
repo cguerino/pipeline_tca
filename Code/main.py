@@ -35,7 +35,7 @@ parser.add_argument('--cutoff', '-co', type=int, default=25,
 					help='Cut-off for consecutive NaNs in a trial')
 parser.add_argument('--thres', '-th', type=int, default=80, 
 					help='Threshold for non_consecutive NaNs in a trial')
-parser.add_argument('--animal', '-a', type=int, default=0, 
+parser.add_argument('--animal', '-a', type=int, default=15, 
 					help='Choose animal to process')
 parser.add_argument('--tol', '-tl', type=int, default=15, 
 					help='Tolerance for data')
@@ -47,8 +47,10 @@ parser.add_argument('--rank', '-r', type=int, default=6,
 					help='Rank of the TCA')
 parser.add_argument('--function', '-f', type=str, default='custom_parafac', 
 					help='TCA function to use: parafac, non_negative_parafac, custom_parafac')
-parser.add_argument('--neg_fac', '-nf', type=str, default=None, 
+parser.add_argument('--neg_fac', '-nf', type=str, default=0, 
 					help='Factor of the TCA which is allowed to be negative')
+parser.add_argument('--tmp', '-tmp', action='store_true', 
+					help='Save and compute data of tmp folder for debugging')
 
 # Select relevant data for processing
 parser.add_argument('--Block', '-B', type=int, nargs='*', default=None, 
@@ -75,7 +77,14 @@ parser.add_argument('--Performance', '-P', type=int, nargs='*', default=None,
 args = parser.parse_args()
 
 animal = params.animal_list[args.animal]
-name = '{}'.format(random.getrandbits(32))
+
+if not args.tmp: 
+	name = '{}'.format(random.getrandbits(32))
+else:
+	name = 'tmp'
+
+if not args.preprocess and not args.computation:
+	args.preprocess, args.computation = True, True
 
 arguments = {
 	'Cut_off': args.cutoff,
@@ -104,7 +113,7 @@ selection = {
 if args.preprocess:
 
 	# Loading data from folder
-	meta_df, roi_tensor, acti, beh_mat, f0, trials_of_interest = data.load_data(animal, 
+	meta_df, roi_tensor, acti, f0, trials_of_interest = data.load_data(animal, 
 																			selection, args.verbose)
 
 	if args.plotting: plot.map_of_rois(acti, roi_tensor)
@@ -115,7 +124,6 @@ if args.preprocess:
 	# Drop such trials
 	acti = np.delete(acti, trials_to_drop, 2)
 	f0_fin = np.delete(f0, trials_to_drop, 1)
-	beh_mat = np.delete(beh_mat, trials_to_drop, 0)
 	meta_df = meta_df.drop([meta_df.index[i] for i in trials_to_drop])
 
 	if args.verbose: print('We delete {0} trials because of NaN'.format(len(trials_to_drop)))
@@ -152,41 +160,46 @@ if args.preprocess:
 
 #################################### COMPUTATION ##########################################
 if args.computation:
+	# Load processed data
 	meta_df, roi_tensor, acti = data.load_processed_data(animal)
 
-	# To move in preprocessing steps
+	# Normalize data
 	norm_acti = prepro.normalize_acti(acti)
-
-	assert roi_tensor.shape[2] == norm_acti.shape[0]
- 	
+	
+	# Convert to pytorch tensor for computation 	
 	norm_acti = torch.tensor(norm_acti)
 
-
+	# Choose with which function compute TCA
 	if args.function == 'custom_parafac':
 		if args.neg_fac != None:
-			factors, rec_errors = tca.custom_parafac(norm_acti, args.rank, n_iter_max=10000, tol=args.tol, 
+			factors, rec_errors = tca.custom_parafac(norm_acti, args.rank, n_iter_max=10000, tol=1e-07, 
 											  verbose=1, return_errors=True, neg_fac=args.neg_fac)
 	elif args.function == 'parafac':
-		factors, rec_errors = tl.parafac(norm_acti, args.rank, n_iter_max=10000, tol=args.tol, 
+		factors, rec_errors = tl.parafac(norm_acti, args.rank, n_iter_max=10000, tol=1e-07, 
 											  verbose=1, return_errors=True)
 	elif args.function == 'non_negative_parafac':
-		# return_erros not implemented by default, custom settings
-		factors, rec_errors = tl.non_negative_parafac(norm_acti, args.rank, n_iter_max=10000, tol=args.tol, 
+		factors, rec_errors = tl.non_negative_parafac(norm_acti, args.rank, n_iter_max=10000, tol=1e-07, 
 											  verbose=1, return_errors=True)
 
-
+	# Bring back factors array to cpu memory and convert it to numpy array
 	factors = [f.cpu().numpy() for f in factors]
 
+	# Perform random forest classification
 	X, y_odor, y_rew = shuffle(factors[2], meta_df['Odor'].tolist(), meta_df['Reward'].tolist())
 	clf = RandomForestClassifier(n_estimators=50, max_depth=None, min_samples_split=2, max_features='sqrt')
 	X = StandardScaler().fit_transform(X)
 	scores_odor = cross_val_score(clf, X, y_odor, cv = 8)
 	scores_rew = cross_val_score(clf, X, y_rew, cv = 8)
 
-	print("Odor prediction - Accuracy: %0.4f (+/- %0.4f)" % (scores_odor.mean(), scores_odor.std()))
-	print("Reward prediction - Accuracy: %0.4f (+/- %0.4f)" % (scores_rew.mean(), scores_rew.std()))
+	# Save data 
+	data.save_results(factors, rec_errors, scores_odor, scores_rew, animal, name)
 
-	tca.factorplot(factors, roi_tensor, meta_df, color=meta_df['Odor Color'].tolist(), balance=True)
+	if args.verbose: 
+		print("Odor prediction - Accuracy: %0.4f (+/- %0.4f)" % (scores_odor.mean(), scores_odor.std()))
+		print("Reward prediction - Accuracy: %0.4f (+/- %0.4f)" % (scores_rew.mean(), scores_rew.std()))
+
+	# Plot data and save it
+	tca.factorplot(factors, roi_tensor, meta_df, animal, name, selection, arguments, color=meta_df['Odor Color'].tolist(), balance=True)
 
 
 

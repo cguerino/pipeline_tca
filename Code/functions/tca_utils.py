@@ -694,7 +694,7 @@ def seq_parafac(input_tensor, max_rank, nb_trial, pred_df, tol=1e-07, mode='non-
 	return err_df, sim_df, spa_df, odor_df, rew_df
 
 
-def factorplot(factors, roi_tensor, meta_df, animal, name, selection, arguments, balance=True, color='k', shaded=None, order=False, path=None):
+def factorplot(factors, roi_tensor, meta_df, animal, name, selection, arguments, balance=True, color='k', shaded=None, order=False):
 	"""Display the factors extracted with TCA
 	
 	The TCA extracted factors are represented in 3 columns and as many rows as there are components.
@@ -858,14 +858,15 @@ def factorplot(factors, roi_tensor, meta_df, animal, name, selection, arguments,
 	# make so that plots are tightly presented
 	plt.tight_layout()
 
-	# if a path is given, save the obtained figure
-	if path is not None:
-		plt.savefig(path)
-
-	# display figure
-	configuration = pd.concat([pd.DataFrame(arguments, index=[0]), pd.DataFrame(selection, index[0])], axis=1)
-	configuration.to_csv(os.path.join(paths.path2Figures, animal, name, 'configuration.csv'))
-	plt.savefig(os.path.join(paths.path2Figures, animal, name, 'factorplot.png'))
+	# display and save figure
+	path = os.path.join(paths.path2Figures, animal, name)
+	try:
+	    os.makedirs(path)
+	except:
+	    FileExistsError
+	configuration = pd.concat([pd.DataFrame(arguments, index=[0]), pd.DataFrame(selection, index=[0])], axis=1)
+	configuration.to_csv(os.path.join(path, 'configuration.csv'))
+	plt.savefig(os.path.join(path, 'factorplot.png'))
 
 	plt.show(fig)
 	
@@ -1068,6 +1069,8 @@ def custom_parafac(tensor, rank, n_iter_max=100, init='svd', svd='numpy_svd', to
 		Level of verbosity
 	return_errors : bool, optional
 		Activate return of iteration errors
+	neg_fac: int, optional
+		Index of the factor for which negative values are allowed
 
 
 	Returns

@@ -12,6 +12,17 @@ paths = sett.paths()
 
 
 def map_of_rois(acti, roi_tensor):
+	""" Make a map of ROIs and an histogram of the # of NaNs per trials 
+	Arguments:
+		acti {array} -- activation tensor
+		roi_tensor {array} -- mask of ROIs
+
+	Keyword Arguments:
+		None
+
+	Returns:
+		None
+	"""
 	N, T, K = acti.shape
 	plt.imshow(tca.make_map(roi_tensor, np.ones(roi_tensor.shape[2])), cmap='hot')
 
@@ -38,7 +49,17 @@ def map_of_rois(acti, roi_tensor):
 	plt.tight_layout()
 	plt.savefig(os.path.join(paths.path2Figures, 'map_of_rois.png'))
 
-def nan_ivestigation():
+def nan_ivestigation(acti):
+	""" Bar plot of consecutive NaNs and total numbr of NaNs per trial 
+	Arguments:
+		acti {array} -- activation tensor
+
+	Keyword Arguments:
+		None
+		
+	Returns:
+		None
+	"""
 	# We remove the trials with only NaN
 	nan_per_trial = pd.Series(np.isnan(acti[0,:,:]).sum(axis=0))
 	drop_trial = nan_per_trial[nan_per_trial == 285].index.tolist()
@@ -69,8 +90,18 @@ def nan_ivestigation():
 
 
 def normalized_intensity(acti, interpolated_acti):
+	""" Plot of the normalized activation
+	Arguments:
+		acti {array} -- activation tensor
+		interpolated_acti {array} -- activation tensor corrected via linear interpolation
+
+	Keyword Arguments:
+		None
+		
+	Returns:
+		None
+	"""
 	N, T, K = interpolated_acti.shape
-	# Illustration with some well chosen example
 	nan_per_trial = pd.Series(np.isnan(acti[0,:,:]).sum(axis = 0), index = range(K))
 	roi = nan_per_trial.sort_values(ascending = False).index[1]
 
@@ -86,6 +117,16 @@ def normalized_intensity(acti, interpolated_acti):
 
 
 def explore_integrity(interpolated_acti):
+	""" Explore integrity of data after linear interpolation across trials 
+	Arguments:
+		interpolated_acti {array} -- activation tensor corrected via linear interpolation
+
+	Keyword Arguments:
+		None
+		
+	Returns:
+		None
+	"""
 	N, T, K = interpolated_acti.shape
 	nb_flag_roi = []
 	nb_flag_trial = []
@@ -142,6 +183,18 @@ def explore_integrity(interpolated_acti):
 	plt.savefig(os.path.join(paths.path2Figures, 'explore_integrity2.png'))
 
 def potential_outliers(f0, flags, acti):
+	""" Detect abnormal ROIs 
+	Arguments:
+		f0 {array} -- baseline fluorescence
+		flags {array} -- mask of abnormal ROIs
+		acti {array} -- activation tensor
+
+	Keyword Arguments:
+		None
+		
+	Returns:
+		None
+	"""
 	N, T, K = acti.shape
 	fig = plt.figure(figsize = (20,10))
 
@@ -160,11 +213,33 @@ def potential_outliers(f0, flags, acti):
 	plt.savefig(os.path.join(paths.path2Figures, 'potential_outliers.png'))
 
 def explore_unreal_roi(big_flag, roi_tensor):
+	""" Detect abnormal ROIs 
+	Arguments:
+		big_flag {array} -- mask of abnormal ROIs
+		roi_tensor {array} -- mask of ROIs
+
+	Keyword Arguments:
+		None
+		
+	Returns:
+		None
+	"""
 	blob = big_flag.sum(axis=1)
 	plt.imshow(tca.make_map(roi_tensor, blob), cmap='hot')
 	plt.savefig(os.path.join(paths.path2Figures, 'explore_unreal_roi.png'))
 
 def plot_flagged_roi(f0, flag_roi):
+	""" PLot flagged ROIs
+	Arguments:
+		f0 {array} -- baseline fluorescence
+		flag_roi {list} -- flagged ROIs
+
+	Keyword Arguments:
+		None
+		
+	Returns:
+		None
+	"""
 	width = 30
 	height = 20
 	assert width * height >= len(flag_roi), 'Increase number of subplots'
