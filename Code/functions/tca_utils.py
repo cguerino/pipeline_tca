@@ -8,28 +8,27 @@ Created on Tue Nov 27 15:10:47 2018
 Some useful functions for TCA
 """
 import os 
+import torch
 import itertools
-import tensortools as tt
 import numpy as np
-import matplotlib.pyplot as plt
-import tensorly as tl
-from tensorly.decomposition import non_negative_parafac, parafac
+import scipy as sci
 import pandas as pd
+import seaborn as sns
+import tensorly as tl
+import statannot as sta
+import tensortools as tt
+import matplotlib.pyplot as plt
+
+from munkres import Munkres
 from sklearn.utils import shuffle
+from sklearn.metrics import r2_score
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import cross_val_score
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import r2_score
-import scipy as sci
-import seaborn as sns
-import statannot as sta
-import time
 
-import torch
-
+from tensorly.decomposition import non_negative_parafac, parafac
 
 from functions import settings as sett
-
 paths = sett.paths()
 
 
@@ -772,7 +771,7 @@ def factorplot(factors, roi_tensor, meta_df, animal, name, selection, arguments,
 		# arrange labels on x axis
 		axarr[r, 1].locator_params(nbins=T//30, steps=[1, 3, 5, 10], min_n_ticks=T//30)
 		# color the shaded region
-		axarr[r, 1].fill_betweenx([0, np.max(factors[1])+.01], 15*shaded[0],
+		axarr[r, 1].fill_betweenx([np.min(factors[1]), np.max(factors[1])+.01], 15*shaded[0],
 								  15*shaded[1], facecolor='red', alpha=0.5)
 
 		## plot trial factors as a scatter plot
@@ -859,7 +858,8 @@ def factorplot(factors, roi_tensor, meta_df, animal, name, selection, arguments,
 	plt.tight_layout()
 
 	# display and save figure
-	path = os.path.join(paths.path2Figures, animal, name)
+	path = os.path.join(paths.path2Figures, animal, str(arguments['Function']), 
+						str(arguments['Init']), str(arguments['Rank']), name)
 	try:
 	    os.makedirs(path)
 	except:
@@ -868,7 +868,7 @@ def factorplot(factors, roi_tensor, meta_df, animal, name, selection, arguments,
 	configuration.to_csv(os.path.join(path, 'configuration.csv'))
 	plt.savefig(os.path.join(path, 'factorplot.png'))
 
-	plt.show(fig)
+	#plt.show(fig)
 	
 
 def factorplot_singlecomp(factors, roi_tensor, b=None, balance=True, color='k', shaded=None):
@@ -923,7 +923,10 @@ def factorplot_singlecomp(factors, roi_tensor, b=None, balance=True, color='k', 
 
 	# plot neuron factors on the ROI map
 	roi_map = make_map(roi_tensor, factors[0])
-	axarr[0].imshow(roi_map, vmin=0, vmax=np.max(factors[0]), cmap='hot')
+	if np.min(factors[0]) < 0:
+		axarr[0].imshow(roi_map, vmin=0, vmax=np.max(factors[0]), cmap='coolwarm')
+	else:
+		axarr[0].imshow(roi_map, vmin=0, vmax=np.max(factors[0]), cmap='hot')
 	
 	# plot time factors as a lineplot
 	axarr[1].plot(np.arange(1, T+1), factors[1], color='k', linewidth=2)
@@ -979,10 +982,10 @@ def factorplot_singlecomp(factors, roi_tensor, b=None, balance=True, color='k', 
 	# make so that plots are tightly presented
 	plt.tight_layout()
 	plt.savefig(os.path.join(paths.path2Figures, 'factorplot.png'))
-	plt.show()
+	#plt.show()
 
 
-def custom_initialize_factors(tensor, rank, init='svd', svd='numpy_svd', neg_fac=0, random_state=None, non_negative=False):
+def custom_initialize_factors(tensor, rank, init='random', svd='numpy_svd', neg_fac=0, random_state=None, non_negative=False):
 	r"""Initialize factors used in `parafac`.
 
 	The type of initialization is set using `init`. If `init == 'random'` then
@@ -1010,8 +1013,10 @@ def custom_initialize_factors(tensor, rank, init='svd', svd='numpy_svd', neg_fac
 	rng = tl.random.check_random_state(random_state)
 
 	if init == 'random':
-		factors = [tl.tensor(rng.random_sample((tensor.shape[i], rank)), **tl.context(tensor)) for i in range(tl.ndim(tensor))]
-		custom_factors = [f if i == neg_fac else tl.abs(f) for i, f in enumerate(factors)]
+		print(neg_fac)
+		factors = [tl.tensor(rng.random_sample((tensor.shape[i], rank))*2 - 1, **tl.context(tensor)) for i in range(tl.ndim(tensor))]
+
+		factors = [f if int(i) == int(neg_fac) else tl.abs(f) for i, f in enumerate(factors)]
 
 	elif init == 'svd':
 		try:
@@ -1037,11 +1042,12 @@ def custom_initialize_factors(tensor, rank, init='svd', svd='numpy_svd', neg_fac
 				factors.append(U[:, :rank])
 			else:
 				 factors.append(tl.abs(U[:, :rank]))
-		return factors
+	else:
+		raise ValueError('Initialization method "{}" not recognized'.format(init))
+	
+	return factors
 
-	raise ValueError('Initialization method "{}" not recognized'.format(init))
-
-def custom_parafac(tensor, rank, n_iter_max=100, init='svd', svd='numpy_svd', tol=1e-8,
+def custom_parafac(tensor, rank, n_iter_max=100, init='svd', svd='numpy_svd', tol=1e-7,
 			orthogonalise=False, random_state=None, verbose=False, return_errors=False, neg_fac=0):
 	"""CANDECOMP/PARAFAC decomposition via alternating least squares (ALS)
 
@@ -1092,20 +1098,22 @@ def custom_parafac(tensor, rank, n_iter_max=100, init='svd', svd='numpy_svd', to
 	rec_errors = []
 	norm_tensor = tl.norm(tensor, 2)
 	epsilon = 10e-12
+	n_factors = len(factors)
+	dims = tl.ndim(tensor)
 	
 	for iteration in range(n_iter_max):
-		for mode in range(tl.ndim(tensor)):
+		for mode in range(dims):
 			if mode == neg_fac:
 				pseudo_inverse = tl.tensor(np.ones((rank, rank)), **tl.context(tensor))
 				for i, factor in enumerate(factors):
 					if i != mode:
 						pseudo_inverse = pseudo_inverse*tl.dot(tl.transpose(factor), factor)
-			   
 				factor = tl.dot(tl.base.unfold(tensor, mode), tl.tenalg.khatri_rao(factors, skip_matrix=mode))
 				factor = tl.transpose(tl.solve(tl.transpose(pseudo_inverse), tl.transpose(factor)))
 				factors[mode] = factor
+
 			else:
-				sub_indices = [i for i, j in enumerate(factors) if i != mode]
+				sub_indices = [i for i in range(n_factors) if i != mode]
 				for i, e in enumerate(sub_indices):
 					if i:
 						accum = accum*tl.dot(tl.transpose(factors[e]), factors[e])
@@ -1117,19 +1125,21 @@ def custom_parafac(tensor, rank, n_iter_max=100, init='svd', svd='numpy_svd', to
 				denominator = tl.dot(factors[mode], accum)
 				denominator = tl.clip(denominator, a_min=epsilon, a_max=None)
 				factors[mode] = factors[mode]* numerator / denominator
-		if tol:
+		
+		if iteration % 25 == 0 and iteration > 1:
 			rec_error = tl.norm(tensor - tl.kruskal_tensor.kruskal_to_tensor(factors), 2) / norm_tensor
 			rec_errors.append(rec_error)
+		
+		if iteration % 25 == 1 and iteration > 1:
+			rec_error = tl.norm(tensor - tl.kruskal_tensor.kruskal_to_tensor(factors), 2) / norm_tensor
+			rec_errors.append(rec_error)
+			print('reconstruction error={}, variation={}.'.format(
+					rec_errors[-1], rec_errors[-2] - rec_errors[-1]))
 
-			if iteration > 1:
+			if abs(rec_errors[-2] - rec_errors[-1]) < tol:
 				if verbose:
-					print('reconstruction error={}, variation={}.'.format(
-					    rec_errors[-1], rec_errors[-2] - rec_errors[-1]))
-
-				if tol and abs(rec_errors[-2] - rec_errors[-1]) < tol:
-					if verbose:
-						print('converged in {} iterations.'.format(iteration))
-					break
+					print('converged in {} iterations.'.format(iteration))
+				break
 	
 	np.save(os.path.join(paths.path2Output, 'rank{0}_factors'.format(rank)), factors)
 	np.save(os.path.join(paths.path2Output, 'rank{0}_errors'.format(rank)), rec_errors)
@@ -1138,3 +1148,106 @@ def custom_parafac(tensor, rank, n_iter_max=100, init='svd', svd='numpy_svd', to
 		return factors, rec_errors
 	else:
 		return factors
+
+
+def kruskal_align(U, V, permute_U=False, permute_V=False):
+    """Aligns two KTensors and returns a similarity score.
+
+    Parameters
+    ----------
+    U : KTensor
+        First kruskal tensor to align.
+    V : KTensor
+        Second kruskal tensor to align.
+    permute_U : bool
+        If True, modifies 'U' to align the KTensors (default is False).
+    permute_V : bool
+        If True, modifies 'V' to align the KTensors (default is False).
+
+    Notes
+    -----
+    If both `permute_U` and `permute_V` are both set to True, then the
+    factors are ordered from most to least similar. If only one is
+    True then the factors on the modified KTensor are re-ordered to
+    match the factors in the un-aligned KTensor.
+
+    Returns
+    -------
+    similarity : float
+        Similarity score between zero and one.
+    """
+
+    # Compute similarity matrices.
+    unrm = [f / np.linalg.norm(f, axis=0) for f in U]
+    vnrm = [f / np.linalg.norm(f, axis=0) for f in V]
+    sim_matrices = [np.dot(u.T, v) for u, v in zip(unrm, vnrm)]
+    cost = 1 - np.mean(np.abs(sim_matrices), axis=0)
+
+    # Solve matching problem via Hungarian algorithm.
+    indices = Munkres().compute(cost.copy())
+    prmU, prmV = zip(*indices)
+
+    # Compute mean factor similarity given the optimal matching.
+    similarity = np.mean(1 - cost[prmU, prmV])
+
+    # If U and V are of different ranks, identify unmatched factors.
+    unmatched_U = list(set(range(U[0].shape[1])) - set(prmU))
+    unmatched_V = list(set(range(V[0].shape[1])) - set(prmV))
+
+    # If permuting both U and V, order factors from most to least similar.
+    if permute_U and permute_V:
+        idx = np.argsort(cost[prmU, prmV])
+
+    # If permute_U is False, then order the factors such that the ordering
+    # for U is unchanged.
+    elif permute_V:
+        idx = np.argsort(prmU)
+
+    # If permute_V is False, then order the factors such that the ordering
+    # for V is unchanged.
+    elif permute_U:
+        idx = np.argsort(prmV)
+
+    # If permute_U and permute_V are both False, then we are done and can
+    # simply return the similarity.
+    else:
+        return similarity
+
+    # Re-order the factor permutations.
+    prmU = [prmU[i] for i in idx]
+    prmV = [prmV[i] for i in idx]
+
+    # Permute the factors.
+    if permute_U:
+        U = [f[:, prmU] for f in U]
+    if permute_V:
+        V = [f[:, prmV] for f in V]
+
+    # Flip the signs of factors.
+    flips = np.sign([F[prmU, prmV] for F in sim_matrices])
+    flips[0] *= np.prod(flips, axis=0)  # always flip an even number of factors
+
+    if permute_U:
+        for i, f in enumerate(flips):
+            U[i] *= f
+
+    elif permute_V:
+        for i, f in enumerate(flips):
+            V[i] *= f
+
+    # Return the similarity score
+    return similarity
+
+	
+def compute_r2_score(acti, factors):
+	N, T, K = acti.shape
+
+	acti_traces = [acti[n, :, k] for n in range(N) for k in range(K)]
+	acti_traces = [a.cpu() for a in acti_traces]
+	factors_traces = [factors[n, :, k] for n in range(N) for k in range(K)]
+
+	assert acti_traces[0].shape == factors_traces[0].shape
+
+	scores = [r2_score(acti_traces[i], factors_traces[i]) for i in range(len(acti_traces))]
+
+	return scores

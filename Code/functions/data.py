@@ -80,23 +80,26 @@ def save_data(interpolated_acti, flag_roi, trials_to_drop, roi_tensor, meta_df, 
 
 	configuration = pd.concat([pd.DataFrame(arguments, index=[0]), pd.DataFrame(selection, index=[0])], axis=1)
 	
-	path = os.path.join(paths.path2Output, animal, name)
+	path = os.path.join(paths.path2Output, animal, str(arguments['Function']), 
+						str(arguments['Init']), str(arguments['Rank']), name)
 	try:
 	    os.makedirs(path)
 	except:
 	    FileExistsError
 	
-	configuration.to_csv(os.path.join(paths.path2Output, animal, name, 'configuration.csv'))
+	configuration.to_csv(os.path.join(path, 'configuration.csv'))
 	np.save(os.path.join(path, 'acti'), interpolated_acti)
 	np.save(os.path.join(path,'flag_roi'), flag_roi)
 	np.save(os.path.join(path,'trials_to_drop'), trials_to_drop)
 	np.save(os.path.join(path,'roi_tensor'), roi_tensor)
 	meta_df.to_csv(os.path.join(path, 'meta_df.csv'))
 
-def load_processed_data(animal):
+def load_processed_data(animal, name, arguments):
 	""" Load preprocessed data
 	Arguments:
 		animal {string} -- name of the animal
+		name {string} -- random name of the current running simulation
+		arguments {dict} -- simulation configuration. {'Parameter': value}
 	
 	Keyword:
 		None
@@ -106,15 +109,16 @@ def load_processed_data(animal):
 		roi_tensor {array} -- mask of ROIs
 		acti {array} -- activation data dependnig on ROI, time and trial	
 	"""
-	path = os.path.join(paths.path2Output, animal)
+	path = os.path.join(paths.path2Output, animal, str(arguments['Function']), 
+						str(arguments['Init']), str(arguments['Rank']), name)
 	
 	meta_df = pd.read_csv(os.path.join(path,'meta_df.csv'))
-	roi_tensor = np.load(os.path.join(paths.path2Output, animal,'roi_tensor.npy'))
-	acti = np.load(os.path.join(paths.path2Output, animal,'acti.npy'))
+	roi_tensor = np.load(os.path.join(path,'roi_tensor.npy'))
+	acti = np.load(os.path.join(path,'acti.npy'))
 
 	return meta_df, roi_tensor, acti
 
-def save_results(factors, rec_errors, scores_odor, scores_rew, animal, name):
+def save_results(factors, rec_errors, scores_odor, scores_rew, animal, name, arguments):
 	""" Save results of the TCA and random forests
 
 	Arguments:
@@ -131,8 +135,16 @@ def save_results(factors, rec_errors, scores_odor, scores_rew, animal, name):
 	Returns:
 		None
 	"""
-	rank = factors[0].shape[1]
-	np.save(os.path.join(paths.path2Output, animal, name, 'rank{0}_factors'.format(rank)), factors)
-	np.save(os.path.join(paths.path2Output, animal, name, 'rank{0}_errors'.format(rank)), rec_errors)
-	np.save(os.path.join(paths.path2Output, animal, name, 'scores_odor'), scores_odor)
-	np.save(os.path.join(paths.path2Output, animal, name, 'scores_rew'), scores_rew)
+	path = os.path.join(paths.path2Output, animal, str(arguments['Function']), 
+						str(arguments['Init']), str(arguments['Rank']), name)
+	
+
+	try:
+	    os.makedirs(path)
+	except:
+	    FileExistsError
+
+	np.save(os.path.join(path, 'factors'), factors)
+	np.save(os.path.join(path, 'errors'), rec_errors)
+	np.save(os.path.join(path, 'scores_odor'), scores_odor)
+	np.save(os.path.join(path, 'scores_rew'), scores_rew)

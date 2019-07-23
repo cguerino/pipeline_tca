@@ -97,7 +97,7 @@ def clean_messy_ROIs(interpolated_acti, tol):
 	return flag_roi, flag_trial, big_flag
 
 
-def normalize_acti(acti):
+def norm(acti):
 	""" Normalize activation data
 
 	Arguments:
@@ -117,6 +117,18 @@ def normalize_acti(acti):
 		for n in range(N):
 			norm_acti[n,t,:] = np.divide(acti[n,t,:] + 1, max_amp + 1)
 
+	#norm_acti = (acti - np.min(acti)) / (np.max(acti) - np.min(acti))*2 - 1
 	return norm_acti
 
+def min_max(acti):
+	norm_acti = (acti - np.min(acti)) / (np.max(acti) - np.min(acti))
+
+	return norm_acti
+
+def day(acti, meta_df):
+	for day in set(meta_df['Day'].tolist()):
+		trials_to_norm = meta_df[meta_df['Day'] ==  day].index.tolist()
+		acti[:, : , trials_to_norm] = norm(acti[:, : , trials_to_norm])
+
+	return acti
 
