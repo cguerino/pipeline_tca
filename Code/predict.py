@@ -1,9 +1,11 @@
 import os
+import keras
 import numpy as np 
 import pandas as pd
-import keras
 
+from keras_tqdm import TQDMCallback
 from functions import settings as sett 
+paths = sett.paths()
 
 def train_test_folds(X, y):
 
@@ -20,24 +22,38 @@ def train_test_folds(X, y):
 
 	return data
 
-paths = sett.paths()
-
-
-acti = np.load(os.path.join(paths.path2Output, '020618-10', 'non_negative_parafac', 'random', '6', '3834623592', 'acti.npy'))
-meta_df = pd.read_csv(os.path.join(paths.path2Output, '020618-10', 'non_negative_parafac', 'random', '6', '3834623592', 'meta_df.csv'))
-
+acti = np.load(os.path.join(paths.path2Output, '020618-10', 'non_negative_parafac', 'random', '6', '621510140', 'acti.npy'))
+factors = np.load(os.path.join(paths.path2Output, '020618-10', 'non_negative_parafac', 'random', '6', '621510140', 'factors.npy'))
+meta_df = pd.read_csv(os.path.join(paths.path2Output, '020618-10', 'non_negative_parafac', 'random', '6', '621510140', 'meta_df.csv'))
 
 # Separate trials into blocks
 blocks = {}
 for block in set(meta_df['Block'].tolist()):
 	blocks[block] = meta_df[meta_df['Block'] == block].index.tolist()
 
+# X = np.array([factors[2][blocks[block], :] for block in blocks])
+
+# print(set(meta_df['Odor Color'].tolist()))
+
+# new_X = np.empty((13, 20, 7))
+# for i, block in enumerate(X):
+# 	for j, trial in enumerate(block):
+# 		if (meta_df.loc[[j], ['Odor Color']].values[0])[0] == 'red':
+# 			print('ok')
+# 			new_X[i][j] = np.append(X[i][j], 1)
+# 		elif (meta_df.loc[[j], ['Odor Color']].values[0])[0] == 'black':
+# 			new_X[i][j] = np.append(X[i][j], 0)
+# 			print('ook')
+# X = new_X
+
+
 for block in blocks:
+	X = factors[2][blocks[block], :]
 	X = np.swapaxes(acti[:, :, blocks[block]], 0, 2)
 
 	# One hot array: [HIT, MISS, FA, CR]
 	y = np.zeros((X.shape[0], 4))
-	for i, trial in enumerate(blocks[block]):
+	for i, trial in enumerate(blocks):
 		if (meta_df.loc[[trial], ['Behavior']].values[0])[0] == 'HIT':
 			y[i, 0] = 1
 		elif (meta_df.loc[[trial], ['Behavior']].values[0])[0] == 'MISS':
@@ -46,44 +62,46 @@ for block in blocks:
 			y[i, 2] = 1
 		elif (meta_df.loc[[trial], ['Behavior']].values[0])[0] == 'CR':
 			y[i, 3] = 1
-	data = train_test_folds(X, y)
+
+	# data = train_test_folds(X, y)
 	scores = []
-	for (X_train, X_test, y_train, y_test) in data:
-		y_train = np.split(y_train, 4, axis=1)
-		y_test = np.split(y_test, 4, axis=1)
+	# for (X_train, X_test, y_train, y_test) in data:
+	y_train = np.split(y, 4, axis=1)
+	X_train = X
+	# y_test = np.split(y_test, 4, axis=1)
 
-		inp = keras.layers.Input(shape=(X_train.shape[1], X_train.shape[2]))
-		x = keras.layers.LSTM(units=32, dropout=0.4,
-							  input_shape=(X_train.shape[1], X_train.shape[2]), return_sequences=True)(inp)
-		x = keras.layers.LSTM(units=32, dropout=0.4,
-							  input_shape=(X_train.shape[1], X_train.shape[2]), return_sequences=False)(x)
-		x = keras.layers.Dense(units=16)(x)
-		output1 = keras.layers.Dense(1, activation='sigmoid')(x)
-		output2 = keras.layers.Dense(1, activation='sigmoid')(x)
-		output3 = keras.layers.Dense(1, activation='sigmoid')(x)
-		output4 = keras.layers.Dense(1, activation='sigmoid')(x)
+	inp = keras.layers.Input(shape=(X_train.shape[1], X_train.shape[2]))
+	x = keras.layers.LSTM(units=32, dropout=0.4,
+						  input_shape=(X_train.shape[1], X_train.shape[2]), return_sequences=True)(inp)
+	x = keras.layers.LSTM(units=32, dropout=0.4,
+						  input_shape=(X_train.shape[1], X_train.shape[2]), return_sequences=False)(x)
+	x = keras.layers.Dense(units=16)(x)
+	output1 = keras.layers.Dense(1, activation='sigmoid')(x)
+	output2 = keras.layers.Dense(1, activation='sigmoid')(x)
+	output3 = keras.layers.Dense(1, activation='sigmoid')(x)
+	output4 = keras.layers.Dense(1, activation='sigmoid')(x)
 
-		
-		model = keras.models.Model(inp, [output1, output2, output3, output4])
-		model.compile(optimizer='rmsprop',
-		              loss=['binary_crossentropy']*4,
-		              metrics=['mae'])
 
-		model.fit(X_train, y_train, epochs=25, batch_size=4, verbose=1)
-		block_performance = set(meta_df[meta_df['Block'] == block]['Performance'])
-		
-		prediction_behavior = model.predict(X)
-		prediction_behavior = np.concatenate(prediction_behavior, axis=1)
-		for i, row in enumerate(prediction_behavior):
-			null_indices = [i for i in range(prediction_behavior.shape[1]) if i != np.argmax(row)]
-			prediction_behavior[i, np.argmax(row)] = 1
-			prediction_behavior[i, null_indices] = 0
-		
-		prediction_behavior = np.sum(prediction_behavior[:,0]) + np.sum(prediction_behavior[:,3]) / X.shape[0]
+	model = keras.models.Model(inp, [output1, output2, output3, output4])
+	model.compile(optimizer='rmsprop',
+	              loss=['binary_crossentropy']*4,
+	              metrics=['mae'])
 
-		scores.append((model.evaluate(X_test, y_test), block_performance, prediction_behavior))
+	model.fit(X_train, y_train, epochs=500, batch_size=1, verbose=1)
+	block_performance = set(meta_df[meta_df['Block'] == block]['Performance'])
 
-########### Printing Scores ###############
+	prediction_behavior = model.predict(X)
+	prediction_behavior = np.concatenate(prediction_behavior, axis=1)
+	for i, row in enumerate(prediction_behavior):
+		null_indices = [i for i in range(prediction_behavior.shape[1]) if i != np.argmax(row)]
+		prediction_behavior[i, np.argmax(row)] = 1
+		prediction_behavior[i, null_indices] = 0
+
+	prediction_behavior = (np.sum(prediction_behavior[:,0]) + np.sum(prediction_behavior[:,3])) / X.shape[0]
+
+	scores.append((model.evaluate(X_test, y_test), block_performance, prediction_behavior))
+
+	########### Printing Scores ###############
 	for i, b in enumerate(scores):
 		print('CV {}'.format(i))
 		print('HIT : %0.4f' % (b[0][5]*100))
