@@ -248,3 +248,10 @@ def plot_flagged_roi(f0, flag_roi):
 	    fig.add_subplot(width, height, i+1)
 	    plt.plot(f0[roi,:])
 	plt.savefig(os.path.join(paths.path2Figures, 'plot_flagged_roi.png'))
+
+def learning_curve(meta_df):
+	meta_df = meta_df.sort(['Day', 'Block'])
+	learning_scores = meta_df['Performance']
+
+	plt.plot(learning_scores)
+	plt.show()

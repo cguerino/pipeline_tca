@@ -18,6 +18,7 @@ import tensorly as tl
 import statannot as sta
 import tensortools as tt
 import matplotlib.pyplot as plt
+from scipy.interpolate import UnivariateSpline
 
 from munkres import Munkres
 from sklearn.utils import shuffle
@@ -1251,3 +1252,21 @@ def compute_r2_score(acti, factors):
 	scores = [r2_score(acti_traces[i], factors_traces[i]) for i in range(len(acti_traces))]
 
 	return scores
+
+def curve_smoothing(x, smooth_factor=0.2):
+	plt.style.use('fivethirtyeight')
+	xs = np.linspace(min(x), max(x), len(x))
+	spl = UnivariateSpline(xs, x)
+	spl.set_smoothing_factor(smooth_factor)
+	
+	return spl(xs)
+	
+def get_raw_traces(rois, acti):
+	fig, axs = plt.subplots(5, 2)
+	idx = np.arange(10).reshape(5, 2)
+	plt.style.use('fivethirtyeight')
+	plt.close()
+	for i in range(5):
+		for j in range(2):
+			plt.plot(acti[rois[idx[i, j]], :, :])
+	plt.show()

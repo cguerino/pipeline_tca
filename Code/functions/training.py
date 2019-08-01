@@ -1,4 +1,5 @@
 import os
+import heapq
 from sklearn.utils import shuffle
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import cross_val_score
@@ -98,7 +99,7 @@ def oob_error_rank(norm_acti, meta_df, init, animal, arguments, name):
 	print('Done')
 
 
-def feature_importance_roi_maps(factors, roi_tensor, clf, animal, arguments, name):
+def feature_importance_roi_maps(factors, roi_tensor, clf, animal, arguments, name, spe=None):
 	feature_importances = clf.feature_importances_ 
 	path = os.path.join(paths.path2Figures, animal, str(arguments['Function']), 
 						str(arguments['Init']), str(arguments['Rank']), name)
@@ -116,9 +117,13 @@ def feature_importance_roi_maps(factors, roi_tensor, clf, animal, arguments, nam
 			plt.imshow(roi_map, vmin=0, vmax=np.max(factors[0]), cmap='hot')
 
 		plt.title('Importance : {}'.format(feature_importances[r]))
-		plt.savefig(os.path.join(path, 'Importance_map_{}.png'.format(feature_importances[r])))
+		if not spe:
+			plt.savefig(os.path.join(path, 'Importance_map_{}.png'.format(feature_importances[r])))
+		else:
+			plt.savefig(os.path.join(path, 'Importance_map_{0}_{1}.png'.format(spe, feature_importances[r])))
 
-def feature_importance_time_factor(factors, roi_tensor, clf, animal, arguments, name):
+
+def feature_importance_time_factor(factors, roi_tensor, clf, animal, arguments, name, spe=None):
 	feature_importances = clf.feature_importances_ 
 	path = os.path.join(paths.path2Figures, animal, str(arguments['Function']), 
 						str(arguments['Init']), str(arguments['Rank']), name)
@@ -142,24 +147,76 @@ def feature_importance_time_factor(factors, roi_tensor, clf, animal, arguments, 
 								  15*shaded[1], facecolor='red', alpha=0.5)
 
 		plt.title('Importance : {}'.format(feature_importances[r]))
-		plt.savefig(os.path.join(path, 'Importance_time_{}.png'.format(feature_importances[r])))
+		if not spe:
+			plt.savefig(os.path.join(path, 'Importance_time_{}.png'.format(feature_importances[r])))
+		else:
+			plt.savefig(os.path.join(path, 'Importance_time_{0}_{1}.png'.format(spe, feature_importances[r])))
 
 
-def speed_tca(X):
-	data_provider = Provider()
-	data_provider.full_tensor = lambda: X
-	env = Environment(data_provider, summary_path='/tmp/cp_' + '20')
-	tf.compat.v1.disable_eager_execution()
 
-	cp = CP_ALS(env)
-	args = CP_ALS.CP_Args(rank=6, validation_internal=1)
-	# build CP model with arguments
-	cp.build_model(args)
-	# train CP model with the maximum iteration of 100
-	cp.train(100)
-	# obtain factor matrices from trained model
-	factor_matrices = cp.factors
-	# obtain scaling vector from trained model
-	lambdas = cp.lambdas
+def best_odor_predictive_rois(factors, roi_tensor, clf_odor, animal, arguments, name):
+	feat_odor = clf_odor.feature_importances_
+	
+	path = os.path.join(paths.path2Figures, animal, str(arguments['Function']), 
+						str(arguments['Init']), str(arguments['Rank']), name)
+	try:
+	    os.makedirs(path)
+	except:
+	    FileExistsError
 
-	return factors
+	max_feat_idx = np.argmax(feat_odor)
+	rois = list(factors[0][:,max_feat_idx])
+	best_rois = heapq.nlargest(10, enumerate(rois), key=lambda x: x[1])
+	best_indices = [best_rois[i][0] for i in range(len(best_rois))]
+	best_values = [best_rois[i][1] for i in range(len(best_rois))]
+
+	reshaped_best_rois = [0]*len(factors[0][:, max_feat_idx])
+	for i, j in zip(best_indices, best_values):
+		reshaped_best_rois[i] = j
+
+
+
+	plt.close()
+	roi_map = tca.make_map(roi_tensor, reshaped_best_rois)
+	if np.min(best_values) < 0:
+		plt.imshow(roi_map, vmin=0, vmax=np.max(best_values), cmap='coolwarm')
+	else:
+		plt.imshow(roi_map, vmin=0, vmax=np.max(best_values), cmap='hot')
+
+	plt.title('Importance : {}'.format(feat_odor[max_feat_idx]))
+	plt.savefig(os.path.join(path, 'Importance_map_odor_{}.png'.format(feat_odor[max_feat_idx])))
+
+	return best_indices, reshaped_best_rois
+	
+def best_rew_predictive_rois(factors, roi_tensor, clf_rew, animal, arguments, name):
+	feat_rew = clf_rew.feature_importances_
+
+	path = os.path.join(paths.path2Figures, animal, str(arguments['Function']), 
+						str(arguments['Init']), str(arguments['Rank']), name)
+	try:
+	    os.makedirs(path)
+	except:
+	    FileExistsError
+
+	max_feat_idx = np.argmax(feat_rew)
+	rois = list(factors[0][:,max_feat_idx])
+	best_rois = heapq.nlargest(10, enumerate(rois), key=lambda x: x[1])
+	best_indices = [best_rois[i][0] for i in range(len(best_rois))]
+	best_values = [best_rois[i][1] for i in range(len(best_rois))]
+
+	reshaped_best_rois = [0]*len(factors[0][:, max_feat_idx])
+	for i, j in zip(best_indices, best_values):
+		reshaped_best_rois[i] = j
+
+	plt.close()
+	roi_map = tca.make_map(roi_tensor, reshaped_best_rois)
+	if np.min(best_values) < 0:
+		plt.imshow(roi_map, vmin=0, vmax=np.max(best_values), cmap='coolwarm')
+	else:
+		plt.imshow(roi_map, vmin=0, vmax=np.max(best_values), cmap='hot')
+
+	plt.title('Importance : {}'.format(feat_rew[max_feat_idx]))
+	plt.savefig(os.path.join(path, 'Importance_map_rew_{}.png'.format(feat_rew[max_feat_idx])))
+
+	return best_indices, reshaped_best_rois
+
