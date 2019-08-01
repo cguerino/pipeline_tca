@@ -27,3 +27,5 @@ if args.TSNE:
 
 if args.correlation:
 	an.correlation_clustering(acti, meta_df, be='CR')
+
+###¨Put predict 

@@ -119,6 +119,17 @@ class arguments():
 		}
 		return self.tca_sett
 
+	def get_preprocess_sett(self):
+		self.preprocess_sett = {
+		'Cut_off': self.args.cutoff,
+		'Threshold': self.args.thres,
+		'Animal': self.args.animal,
+		'Tol': self.args.tol,
+		'Norm': self.args.norm
+		}
+
+		return self.preprocess_sett
+
 	def get_animal(self):
 		self.animal = params().animal_list[self.args.animal]
 

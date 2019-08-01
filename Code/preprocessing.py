@@ -21,28 +21,23 @@ torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
 params = sett.params()
 paths = sett.paths()
-args = sett.arguments()
-animal = sett.get_animal()
+ar = sett.arguments()
 
+args = ar.get_arguments()
+preprocess_sett = ar.get_preprocess_sett()
+animal = ar.get_animal()
 
-
-preprocess_sett = {
-	'Cut_off': args.cutoff,
-	'Threshold': args.thres,
-	'Animal': args.animal,
-	'Tol': args.tol,
-	'Norm': args.norm
-}
-
-selection = {
-}
+path = os.path.join(paths.path2Figures, 'Preprocessed Data', animal)
+if args.plotting:
+	try:
+		os.makedirs(path)
+	except:
+		FileExistsError
 
 # Loading data from folder
-meta_df, roi_tensor, acti, f0, trials_of_interest = data.load_data(animal, 
-																   selection,
-																   args.verbose)
+meta_df, roi_tensor, acti, f0 = data.load_data(animal, args.verbose)
 
-if args.plotting: plot.map_of_rois(acti, roi_tensor)
+if args.plotting: plot.map_of_rois(acti, roi_tensor, path)
 
 # Define trials to drop for too much NaNs or consecutive NaNs
 trials_to_drop = prepro.trials_to_drop(acti, args.cutoff, args.thres, args.verbose)
@@ -57,8 +52,8 @@ if args.verbose: print('We delete {0} trials because of NaN'.format(len(trials_t
 interpolated_acti, drop_roi = prepro.interpolation(acti, args.verbose)
 
 # Plots for data exploration
-if args.plotting: plot.normalized_intensity(acti, interpolated_acti)
-if args.plotting: plot.explore_integrity(interpolated_acti)
+if args.plotting: plot.normalized_intensity(acti, interpolated_acti, path)
+if args.plotting: plot.explore_integrity(interpolated_acti, path)
 
 # Delete remaining ROIs that were not affected by interpolation 
 interpolated_acti = np.delete(interpolated_acti, drop_roi, 0)
@@ -70,9 +65,9 @@ if args.verbose: print('We delete {0} ROI because of NaN'.format(len(drop_roi)))
 flag_roi, flag_trial, flags = prepro.clean_messy_ROIs(interpolated_acti, args.tol)
 
 # Plots to explore
-if args.plotting: plot.potential_outliers(f0, flags, acti)
-if args.plotting: plot.explore_unreal_roi(flags, roi_tensor)
-if args.plotting: plot.plot_flagged_roi(f0, flag_roi)
+if args.plotting: plot.potential_outliers(f0, flags, acti, path)
+if args.plotting: plot.explore_unreal_roi(flags, roi_tensor, path)
+if args.plotting: plot.plot_flagged_roi(f0, flag_roi, path)
 
 # Delete such ROIs
 interpolated_acti = np.delete(interpolated_acti, flag_roi, 0)

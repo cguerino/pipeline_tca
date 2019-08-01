@@ -11,7 +11,7 @@ from functions import settings as sett
 paths = sett.paths()
 
 
-def map_of_rois(acti, roi_tensor):
+def map_of_rois(acti, roi_tensor, path):
 	""" Make a map of ROIs and an histogram of the # of NaNs per trials 
 	Arguments:
 		acti {array} -- activation tensor
@@ -47,7 +47,7 @@ def map_of_rois(acti, roi_tensor):
 	plt.fill_betweenx([0, 1.2 * np.max(nan_per_timeframe)], 105, 135, facecolor='red', alpha=0.5)
 
 	plt.tight_layout()
-	plt.savefig(os.path.join(paths.path2Figures, 'map_of_rois.png'))
+	plt.savefig(os.path.join(path, 'map_of_rois.png'))
 
 def nan_ivestigation(acti):
 	""" Bar plot of consecutive NaNs and total numbr of NaNs per trial 
@@ -89,7 +89,7 @@ def nan_ivestigation(acti):
 
 
 
-def normalized_intensity(acti, interpolated_acti):
+def normalized_intensity(acti, interpolated_acti, path):
 	""" Plot of the normalized activation
 	Arguments:
 		acti {array} -- activation tensor
@@ -113,10 +113,10 @@ def normalized_intensity(acti, interpolated_acti):
 	plt.ylabel('Normalized fluorescence intensity')
 	plt.legend()
 
-	plt.savefig(os.path.join(paths.path2Figures, 'normalized_intensity.png'))
+	plt.savefig(os.path.join(path, 'normalized_intensity.png'))
 
 
-def explore_integrity(interpolated_acti):
+def explore_integrity(interpolated_acti, path):
 	""" Explore integrity of data after linear interpolation across trials 
 	Arguments:
 		interpolated_acti {array} -- activation tensor corrected via linear interpolation
@@ -163,7 +163,7 @@ def explore_integrity(interpolated_acti):
 	plt.title('Trials lost')
 	plt.xlabel('Threshold')
 	plt.ylabel('Number of trials')
-	plt.savefig(os.path.join(paths.path2Figures, 'explore_integrity1.png'))
+	plt.savefig(os.path.join(path, 'explore_integrity1.png'))
 
 
 	fig = plt.figure(figsize = (25,15))
@@ -180,9 +180,9 @@ def explore_integrity(interpolated_acti):
 	plt.xlabel('Trials', {'fontsize': 'large', 'fontweight' : 'roman'})
 	plt.ylabel('ROI', {'fontsize': 'large', 'fontweight' : 'roman'})
 
-	plt.savefig(os.path.join(paths.path2Figures, 'explore_integrity2.png'))
+	plt.savefig(os.path.join(path, 'explore_integrity2.png'))
 
-def potential_outliers(f0, flags, acti):
+def potential_outliers(f0, flags, acti, path):
 	""" Detect abnormal ROIs 
 	Arguments:
 		f0 {array} -- baseline fluorescence
@@ -210,9 +210,9 @@ def potential_outliers(f0, flags, acti):
 	plt.xlabel('Trials', {'fontsize': 'large', 'fontweight' : 'roman'})
 	plt.ylabel('ROI', {'fontsize': 'large', 'fontweight' : 'roman'})
 
-	plt.savefig(os.path.join(paths.path2Figures, 'potential_outliers.png'))
+	plt.savefig(os.path.join(path, 'potential_outliers.png'))
 
-def explore_unreal_roi(big_flag, roi_tensor):
+def explore_unreal_roi(big_flag, roi_tensor, path):
 	""" Detect abnormal ROIs 
 	Arguments:
 		big_flag {array} -- mask of abnormal ROIs
@@ -226,9 +226,9 @@ def explore_unreal_roi(big_flag, roi_tensor):
 	"""
 	blob = big_flag.sum(axis=1)
 	plt.imshow(tca.make_map(roi_tensor, blob), cmap='hot')
-	plt.savefig(os.path.join(paths.path2Figures, 'explore_unreal_roi.png'))
+	plt.savefig(os.path.join(path, 'explore_unreal_roi.png'))
 
-def plot_flagged_roi(f0, flag_roi):
+def plot_flagged_roi(f0, flag_roi, path):
 	""" PLot flagged ROIs
 	Arguments:
 		f0 {array} -- baseline fluorescence
@@ -247,7 +247,7 @@ def plot_flagged_roi(f0, flag_roi):
 	for i, roi in enumerate(flag_roi):
 	    fig.add_subplot(width, height, i+1)
 	    plt.plot(f0[roi,:])
-	plt.savefig(os.path.join(paths.path2Figures, 'plot_flagged_roi.png'))
+	plt.savefig(os.path.join(path, 'plot_flagged_roi.png'))
 
 def learning_curve(meta_df):
 	meta_df = meta_df.sort(['Day', 'Block'])

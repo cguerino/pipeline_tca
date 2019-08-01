@@ -28,6 +28,12 @@ meta_df, acti, norm_acti, smoothed_acti = data.select_data(meta_df, acti, norm_a
 
 name = '{}'.format(random.getrandbits(32))
 
+path = os.path.join(paths.path2Output, animal, args.function, args.init, args.rank)
+try:
+	os.makedirs(path)
+except:
+	FileExistsError
+
 # Convert to pytorch tensor for computation 	
 norm_acti = torch.tensor(norm_acti)
 

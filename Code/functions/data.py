@@ -32,16 +32,6 @@ def load_data(animal, selection, verbose=False):
 
 	meta_df = pd.read_csv(os.path.join(path_raw, 'meta_df.csv'), index_col=0)
 	
-	if selection:
-		for param in selection:
-			if selection[param] != None:
-				meta_df = meta_df[meta_df[param].isin(selection[param])]
-
-	trials_of_interest = meta_df.index.tolist()
-
-	if not trials_of_interest:
-		raise ValueError('Selection is too restrictive, please select at least 1 trial')
-
 	# Load matrices as dictionnary {name: matrix_values}
 	roi_file, raw_mat, raw_beh, f0 = list(map(loadmat, raw_paths))
 	
@@ -50,16 +40,14 @@ def load_data(animal, selection, verbose=False):
 
 	# Remove the first second of acquisition
 	acti = raw_mat['ALLDFF'][:,15:,:]
-	acti = acti[:,:,trials_of_interest]
 	
 	f0 = f0['F0ALL']
-	f0 = f0[:,trials_of_interest]
 
 	if verbose: 
 		N, T, K = acti.shape
 		print('Data contain activity of', N, 'ROI, on a time scale of', T/15, 'seconds, during', K, 'trials')
 
-	return meta_df, roi_tensor, acti, f0, trials_of_interest
+	return meta_df, roi_tensor, acti, f0
 
 def save_data(interpolated_acti, norm_acti, smoothed_acti, flag_roi, trials_to_drop, roi_tensor, meta_df, animal, name, arguments, selection):
 	""" Save preprocessed data in order to save time for different computations. 
