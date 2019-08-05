@@ -10,9 +10,10 @@ from functions import settings as sett
 from functions import tca_utils as tca
 from functions import training as train
 
-tl.set_backend('pytorch')
+# tl.set_backend('pytorch')
 torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
+# Load parameters 
 params = sett.params()
 paths = sett.paths()
 ar = sett.arguments()
@@ -26,13 +27,16 @@ animal = ar.get_animal()
 meta_df, roi_tensor, acti, norm_acti, smoothed_acti = data.load_processed_data_all(animal)
 meta_df, acti, norm_acti, smoothed_acti = data.select_data(meta_df, acti, norm_acti, smoothed_acti, selection)
 
-name = '{}'.format(random.getrandbits(32))
+name = ''.join(['_' + k + '-' + str(selection[k]) for k in selection if not selection[k] == None])[1:]
 
-path = os.path.join(paths.path2Output, animal, args.function, args.init, args.rank)
-try:
-	os.makedirs(path)
-except:
-	FileExistsError
+path = os.path.join(paths.path2Output, animal, args.function, args.init, str(args.rank), name)
+path_fig = os.path.join(paths.path2Figures, animal, args.function, args.init, str(args.rank), name)
+
+for p in [path, path_fig]:	
+	try:
+		os.makedirs(p)
+	except:
+		FileExistsError
 
 # Convert to pytorch tensor for computation 	
 norm_acti = torch.tensor(norm_acti)
@@ -58,26 +62,30 @@ factors = [f.cpu().numpy() for f in factors]
 
 # Perform random forest classification
 score_odor, score_rew, clf_odor, clf_rew = train.rf_oob_score(factors, meta_df, 50)
-train.feature_importance_roi_maps(factors, roi_tensor, clf_odor, animal, tca_sett, name, spe='odor')
-train.feature_importance_time_factor(factors, roi_tensor, clf_odor, animal, tca_sett, name, spe='odor')
+train.feature_importance_roi_maps(factors, roi_tensor, clf_odor, name, path_fig, spe='odor')
+train.feature_importance_time_factor(factors, roi_tensor, clf_odor, name, path_fig, spe='odor')
 
-train.feature_importance_roi_maps(factors, roi_tensor, clf_rew, animal, tca_sett, name, spe='rew')
-train.feature_importance_time_factor(factors, roi_tensor, clf_rew, animal, tca_sett, name, spe='rew')
+train.feature_importance_roi_maps(factors, roi_tensor, clf_rew, name, path_fig, spe='rew')
+train.feature_importance_time_factor(factors, roi_tensor, clf_rew, name, path_fig,spe='rew')
 
-best_rois_idx, reshaped_best_rois = train.best_odor_predictive_rois(factors, roi_tensor, clf_odor, animal, tca_sett, name)
-best_rew_idx, reshaped_best_rew = train.best_rew_predictive_rois(factors, roi_tensor, clf_rew, animal, tca_sett, name)
-
-data.save_results(factors, rec_errors, score_odor, score_rew, animal, name, tca_sett)
+data.save_results(factors, rec_errors, score_odor, score_rew, name, path)
 
 if args.verbose: 
 	print("Odor prediction - Accuracy: %0.4f" % (score_odor))
 	print("Reward prediction - Accuracy: %0.4f" % (score_rew))
 
 # Plot data and save it
-tca.factorplot(factors, roi_tensor, meta_df, animal, name, selection, tca_sett, color=meta_df['Reward Color'].tolist(), balance=True)
+tca.factorplot(factors, roi_tensor, meta_df, animal, name, path_fig, color=meta_df['Reward Color'].tolist(), balance=True)
 
 # tca.get_raw_traces(best_rois_idx, acti)
+
+
 ######################### SECOND PASS ##############################
+name += '_reduce_roi'
+
+best_rois_idx, reshaped_best_rois = train.best_predictive_rois(factors, roi_tensor, clf_odor, name, path_fig, spe='odor')
+best_rew_idx, reshaped_best_rew = train.best_predictive_rois(factors, roi_tensor, clf_rew, name, path_fig, spe='rew')
+
 norm_acti = torch.tensor(norm_acti[best_rois_idx, :, :])
 
 # Choose with which function compute TCA
@@ -108,7 +116,7 @@ if args.verbose:
 	print("Reward prediction - Accuracy: %0.4f" % (score_rew))
 
 # Plot data and save it
-tca.factorplot(factors, roi_tensor, meta_df, animal, name + '2', selection, tca_sett, color=meta_df['Behavior Color'].tolist(), balance=True)
+tca.factorplot(factors, roi_tensor, meta_df, animal, name, path_fig, color=meta_df['Behavior Color'].tolist(), balance=True)
 
 # scores = tca.compute_r2_score(norm_acti, factors_tensor)
 

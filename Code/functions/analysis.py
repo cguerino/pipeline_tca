@@ -5,6 +5,7 @@ from functions import data
 
 from functions import settings as sett 
 from functions import tca_utils as tca
+from functions import training as train
 
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -21,11 +22,7 @@ def similarity_kruskal(fac1, fac2):
 
 	return sim
 
-def TSNE_trials(acti, meta_df, args, animal, dataset='factors'):
-
-	path = os.path.join(paths.path2Figures, animal, args.function, 
-						args.init, str(args.rank), 'tmp')
-
+def TSNE_trials(acti, meta_df, name, path, dataset='factors'):
 	days = list(set(meta_df['Day'].tolist()))
 	blocks = list(set(meta_df['Block'].tolist()))
 
@@ -46,20 +43,19 @@ def TSNE_trials(acti, meta_df, args, animal, dataset='factors'):
 		y = [i[1] for i in X_embedded]
 		
 		plt.scatter(x, y, c=colors)
-		
-		try: 
-			os.makedirs(path)
+
+		try:
+			os.makedirs(os.path.join(path, 'TSNE'))
 		except:
 			FileExistsError
+		
+		i = 0
+		while os.path.exists(os.path.join(path, 'TSNE', 'TSNE_trials_{}_{}_{}.png'.format(dataset, name, i))):
+			i += 1
+		plt.savefig(os.path.join(path, 'TSNE', 'TSNE_trials_{}_{}_{}_{}.png'.format(dataset, day, name, i)))
+		plt.close()
 
-		plt.savefig(os.path.join(path, 'TSNE_trials_{}.png'.format(dataset)))
-
-
-def correlation_clustering(acti, meta_df, be='CR'):
-
-	path = os.path.join(paths.path2Figures, animal, str(arguments['Function']), 
-							str(arguments['Init']), str(arguments['Rank']), name)
-
+def correlation_clustering(acti, meta_df, name, path, be='CR'):
 	for day in set(meta_df['Day'].tolist()):
 		tmp_meta_df = meta_df[meta_df['Day'] == day]
 		for block in set(meta_df['Block'].tolist()):
@@ -68,16 +64,26 @@ def correlation_clustering(acti, meta_df, be='CR'):
 			if len(trials_of_interest) > 0:
 				a = list(set(meta_df.loc[meta_df.Block == block, 'Performance'].values.tolist()))[0]
 				if a == max(list(set(meta_df.loc[meta_df['Day'] == day, 'Performance'].tolist()))):
-					corrs = np.array([np.corrcoef(smoothed_acti[:, :, trial]) for trial in trials_of_interest])
+					corrs = np.array([np.corrcoef(acti[:, :, trial]) for trial in trials_of_interest])
 					corr_matrix = np.mean(corrs, axis=0)
 					fig = sns.clustermap(corr_matrix, cmap='coolwarm', vmin=-1, vmax=1, center=0)
 					indexes = fig.dendrogram_col.reordered_ind
 
 					plt.title('Learning_state : {0}  | Day : {1}'.format(set(meta_df.loc[meta_df.Block == block, 'Performance'].values.tolist()), 
 														   				 set(meta_df.loc[meta_df.Block == block, 'Day'].values.tolist())))
-					fig.savefig(os.path.join(paths.path2Figures, '020618-10', 'non_negative_parafac', 
-											'random', '6', name, 'cluster_{0}_{1}'.format(block, be)))
+					try:
+						os.makedirs(os.path.join(path, 'Cluster'))
+					except:
+						FileExistsError
+					
+					i = 0
+					while os.path.exists(os.path.join(path, 'Cluster', 'correlation_cluster_{}_{}_{}_{:02d}.png'.format(block, be, name, i))):
+						i += 1
+
+					fig.savefig(os.path.join(path, 'Cluster', 'correlation_cluster_{}_{}_{}_{:02d}.png'.format(block, be, name, i)))
+					
 					plt.clf()
+					plt.close()
 
 		for block in set(meta_df['Block'].tolist()):
 			tmp_meta_df = meta_df[meta_df['Block'] == block]
@@ -85,12 +91,19 @@ def correlation_clustering(acti, meta_df, be='CR'):
 			if len(trials_of_interest) > 0:
 				a = list(set(meta_df.loc[meta_df.Block == block, 'Performance'].values.tolist()))[0]
 				if not a == max(list(set(meta_df.loc[meta_df['Day'] == day, 'Performance'].tolist()))):
-					corrs = np.array([np.corrcoef(smoothed_acti[:, :, trial]) for trial in trials_of_interest])
+					corrs = np.array([np.corrcoef(acti[:, :, trial]) for trial in trials_of_interest])
 					corr_matrix = np.mean(corrs, axis=0)
-					corr_matrix = corr_matrix[indexes, :]
-					corr_matrix = corr_matrix[:, indexes]
-					fig = sns.clustermap(corr_matrix, cmap='coolwarm', vmin=-1, vmax=1, center=0, row_cluster=False, col_cluster=False)
-					plt.title('Learning_state : {0}  | Day : {1}'.format(set(meta_df.loc[meta_df.Block == block, 'Performance'].values.tolist()), 
-														   				 set(meta_df.loc[meta_df.Block == block, 'Day'].values.tolist())))
-					fig.savefig(os.path.join(path, 'correlation_clustering_{0}_{1}'.format(block, be)))
+					try:
+						corr_matrix = corr_matrix[indexes, :]
+						corr_matrix = corr_matrix[:, indexes]
+
+						fig = sns.clustermap(corr_matrix, cmap='coolwarm', vmin=-1, vmax=1, center=0, row_cluster=False, col_cluster=False)
+						plt.title('Learning_state : {0}  | Day : {1}'.format(set(meta_df.loc[meta_df.Block == block, 'Performance'].values.tolist()), 
+															   				 set(meta_df.loc[meta_df.Block == block, 'Day'].values.tolist())))
+						
+						fig.savefig(os.path.join(path, 'Cluster', 'correlation_cluster_{}_{}_{}_{:02d}.png'.format(block, be, name, i)))
+					except:
+						UnboundLocalError
+					
 					plt.clf()
+					plt.close()

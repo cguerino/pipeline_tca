@@ -694,7 +694,7 @@ def seq_parafac(input_tensor, max_rank, nb_trial, pred_df, tol=1e-07, mode='non-
 	return err_df, sim_df, spa_df, odor_df, rew_df
 
 
-def factorplot(factors, roi_tensor, meta_df, animal, name, selection, arguments, balance=True, color='k', shaded=None, order=False):
+def factorplot(factors, roi_tensor, meta_df, animal, name, path, balance=True, color='k', shaded=None, order=False):
 	"""Display the factors extracted with TCA
 	
 	The TCA extracted factors are represented in 3 columns and as many rows as there are components.
@@ -859,17 +859,12 @@ def factorplot(factors, roi_tensor, meta_df, animal, name, selection, arguments,
 	plt.tight_layout()
 
 	# display and save figure
-	path = os.path.join(paths.path2Figures, animal, str(arguments['Function']), 
-						str(arguments['Init']), str(arguments['Rank']), name)
-	try:
-	    os.makedirs(path)
-	except:
-	    FileExistsError
-	configuration = pd.concat([pd.DataFrame(arguments, index=[0]), pd.DataFrame(selection, index=[0])], axis=1)
-	configuration.to_csv(os.path.join(path, 'configuration.csv'))
-	plt.savefig(os.path.join(path, 'factorplot.png'))
+	
+	i = 0
+	while os.path.exists(os.path.join(path, 'factorplot{}_{:02d}.png'.format(name, i))):
+		i += 1
 
-	#plt.show(fig)
+	plt.savefig(os.path.join(path, 'factorplot_{}_{:02d}.png'.format(name, i)))
 	
 
 def factorplot_singlecomp(factors, roi_tensor, b=None, balance=True, color='k', shaded=None):
@@ -1141,9 +1136,6 @@ def custom_parafac(tensor, rank, n_iter_max=100, init='svd', svd='numpy_svd', to
 				if verbose:
 					print('converged in {} iterations.'.format(iteration))
 				break
-	
-	np.save(os.path.join(paths.path2Output, 'rank{0}_factors'.format(rank)), factors)
-	np.save(os.path.join(paths.path2Output, 'rank{0}_errors'.format(rank)), rec_errors)
 
 	if return_errors:
 		return factors, rec_errors

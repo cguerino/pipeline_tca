@@ -193,7 +193,7 @@ def select_data(meta_df, acti, norm_acti, smoothed_acti, selection):
 
 	return meta_df, acti, norm_acti, smoothed_acti
 
-def save_results(factors, rec_errors, scores_odor, scores_rew, animal, name, arguments):
+def save_results(factors, rec_errors, scores_odor, scores_rew, name, path):
 	""" Save results of the TCA and random forests
 
 	Arguments:
@@ -210,16 +210,19 @@ def save_results(factors, rec_errors, scores_odor, scores_rew, animal, name, arg
 	Returns:
 		None
 	"""
-	path = os.path.join(paths.path2Output, animal, str(arguments['Function']), 
-						str(arguments['Init']), str(arguments['Rank']), name)
+	i = 0
+	while os.path.exists(os.path.join(path, 'factors{}_{:02d}.npy').format(name, i)):
+		i += 1
+	print(i)
 	
+	np.save(os.path.join(path, 'factors{}_{:02d}').format(name, i), factors)
+	np.save(os.path.join(path, 'errors{}_{:02d}').format(name, i), rec_errors)
+	np.save(os.path.join(path, 'scores_odor{}_{:02d}').format(name, i), scores_odor)
+	np.save(os.path.join(path, 'scores_rew{}_{:02d}').format(name, i), scores_rew)
 
-	try:
-	    os.makedirs(path)
-	except:
-	    FileExistsError
+def check_number_files(path):
+	i = 0
+	while os.path.exists(path):
+		i += 1
 
-	np.save(os.path.join(path, 'factors'), factors)
-	np.save(os.path.join(path, 'errors'), rec_errors)
-	np.save(os.path.join(path, 'scores_odor'), scores_odor)
-	np.save(os.path.join(path, 'scores_rew'), scores_rew)
+	return i

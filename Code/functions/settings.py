@@ -11,8 +11,8 @@ class params():
 	def __init__(self):
 		self.animal_list = ['012216-02', '012216-03', '012216-04', '012216-06',
 			               '082216-01', '082216-02', '082216-03', '082216-05',
-			               '020817-03', '020817-04', '071114-06','020618-01', 
-			               '020618-04', '020618-06', '020618-09', '020618-10']
+			               '020817-03', '020817-04','020618-01', 
+			               '020618-04', '020618-06', '020618-09', '020618-10'] #071114-06
 		
 		self.color_list =  ['orange', 'green', 'red', 'black', 'blue',
 				            'yellow',  'pink', 'cyan', 'purple', 'grey',
@@ -64,7 +64,7 @@ class arguments():
 							help='Compute similarity score between two kruskal matrices')
 		parser.add_argument('--TSNE', '-ts', type=str, default=None, 
 							help='Generate TSNE figure')
-		parser.add_argument('--correlation', '-corr', type=str, default=None, 
+		parser.add_argument('--correlation', '-corr', action='store_true', 
 							help='Generate hierarchical correlation clstering figure between two trials')
 		# Select relevant data for processing
 		parser.add_argument('--Block', '-B', type=int, nargs='*', default=None, 

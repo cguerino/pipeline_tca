@@ -10,7 +10,8 @@ import tensorly as tl
 import numpy as np
 from functions import tca_utils as tca
 import tensorflow as tf
-tl.set_backend('pytorch')
+
+# tl.set_backend('pytorch')
 torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
 from functions import settings as sett 
@@ -73,7 +74,7 @@ def rf_error_difference(factors, meta_df, animal, arguments, name):
 	plt.plot(y, 'g')
 	plt.savefig(os.path.join(path, 'reward.png'))
 
-def oob_error_rank(norm_acti, meta_df, init, animal, arguments, name):
+def oob_error_rank(norm_acti, meta_df, init, path, name):
 	scores_odor, scores_rew = [], []
 	plt.style.use('fivethirtyeight')
 	for i in range(1, 11):
@@ -87,26 +88,13 @@ def oob_error_rank(norm_acti, meta_df, init, animal, arguments, name):
 	plt.plot(np.arange(1, 11), scores_odor, 'r')
 	plt.plot(np.arange(1, 11), scores_rew, 'b')
 	plt.title('OOB_Score depending on rank')
-
-	path = os.path.join(paths.path2Figures, animal, str(arguments['Function']), 
-						str(arguments['Init']), name)
-	try:
-	    os.makedirs(path)
-	except:
-	    FileExistsError
 	
-	plt.savefig(os.path.join(path, 'oob_error_rank.png'))
+	plt.savefig(os.path.join(path, name))
 	print('Done')
 
 
-def feature_importance_roi_maps(factors, roi_tensor, clf, animal, arguments, name, spe=None):
+def feature_importance_roi_maps(factors, roi_tensor, clf, name, path, spe=None):
 	feature_importances = clf.feature_importances_ 
-	path = os.path.join(paths.path2Figures, animal, str(arguments['Function']), 
-						str(arguments['Init']), str(arguments['Rank']), name)
-	try:
-	    os.makedirs(path)
-	except:
-	    FileExistsError
 
 	for r in range(factors[0].shape[1]):
 		plt.close()
@@ -117,24 +105,27 @@ def feature_importance_roi_maps(factors, roi_tensor, clf, animal, arguments, nam
 			plt.imshow(roi_map, vmin=0, vmax=np.max(factors[0]), cmap='hot')
 
 		plt.title('Importance : {}'.format(feature_importances[r]))
+		
+		try:
+			os.makedirs(os.path.join(path, 'Maps'))
+		except:
+			FileExistsError
+
+		i = 0
+		while os.path.exists(os.path.join(path, 'Maps', 'Importance_map_{}_{}_{}_{:02d}.png'.format(spe, feature_importances[r], name,  i))):
+			i += 1
+
 		if not spe:
-			plt.savefig(os.path.join(path, 'Importance_map_{}.png'.format(feature_importances[r])))
+			raise NameError
 		else:
-			plt.savefig(os.path.join(path, 'Importance_map_{0}_{1}.png'.format(spe, feature_importances[r])))
+			plt.savefig(os.path.join(path, 'Maps', 'Importance_map_{}_{}_{}_{:02d}.png'.format(spe, feature_importances[r], name,  i)))
 
 
-def feature_importance_time_factor(factors, roi_tensor, clf, animal, arguments, name, spe=None):
+def feature_importance_time_factor(factors, roi_tensor, clf, name, path, spe=None):
 	feature_importances = clf.feature_importances_ 
-	path = os.path.join(paths.path2Figures, animal, str(arguments['Function']), 
-						str(arguments['Init']), str(arguments['Rank']), name)
 
 	T = factors[1].shape[0]
 	shaded = [7, 9]
-
-	try:
-	    os.makedirs(path)
-	except:
-	    FileExistsError
 
 	for r in range(factors[1].shape[1]):
 		plt.close()
@@ -147,60 +138,32 @@ def feature_importance_time_factor(factors, roi_tensor, clf, animal, arguments, 
 								  15*shaded[1], facecolor='red', alpha=0.5)
 
 		plt.title('Importance : {}'.format(feature_importances[r]))
+
+		try:
+			os.makedirs(os.path.join(path, 'Time'))
+		except:
+			FileExistsError
+		
+		i = 0
+		while os.path.exists(os.path.join(path, 'Time', 'Importance_time_{}_{}_{}_{:02d}.png'.format(spe, feature_importances[r], name, i))):
+			i += 1
+		
 		if not spe:
-			plt.savefig(os.path.join(path, 'Importance_time_{}.png'.format(feature_importances[r])))
+			raise NameError
 		else:
-			plt.savefig(os.path.join(path, 'Importance_time_{0}_{1}.png'.format(spe, feature_importances[r])))
+			plt.savefig(os.path.join(path, 'Time', 'Importance_time_{}_{}_{}_{:02d}.png'.format(spe, feature_importances[r], name, i)))
 
 
 
-def best_odor_predictive_rois(factors, roi_tensor, clf_odor, animal, arguments, name):
-	feat_odor = clf_odor.feature_importances_
-	
-	path = os.path.join(paths.path2Figures, animal, str(arguments['Function']), 
-						str(arguments['Init']), str(arguments['Rank']), name)
-	try:
-	    os.makedirs(path)
-	except:
-	    FileExistsError
+def best_predictive_rois(factors, roi_tensor, clf, name, path, spe=None):
+	if spe == 'odor':
+		feat_ = clf.feature_importances_
+	elif spe == 'rew':
+		feat_ = clf.feature_importances_
 
-	max_feat_idx = np.argmax(feat_odor)
+	max_feat_idx = np.argmax(feat_)
 	rois = list(factors[0][:,max_feat_idx])
-	best_rois = heapq.nlargest(10, enumerate(rois), key=lambda x: x[1])
-	best_indices = [best_rois[i][0] for i in range(len(best_rois))]
-	best_values = [best_rois[i][1] for i in range(len(best_rois))]
-
-	reshaped_best_rois = [0]*len(factors[0][:, max_feat_idx])
-	for i, j in zip(best_indices, best_values):
-		reshaped_best_rois[i] = j
-
-
-
-	plt.close()
-	roi_map = tca.make_map(roi_tensor, reshaped_best_rois)
-	if np.min(best_values) < 0:
-		plt.imshow(roi_map, vmin=0, vmax=np.max(best_values), cmap='coolwarm')
-	else:
-		plt.imshow(roi_map, vmin=0, vmax=np.max(best_values), cmap='hot')
-
-	plt.title('Importance : {}'.format(feat_odor[max_feat_idx]))
-	plt.savefig(os.path.join(path, 'Importance_map_odor_{}.png'.format(feat_odor[max_feat_idx])))
-
-	return best_indices, reshaped_best_rois
-	
-def best_rew_predictive_rois(factors, roi_tensor, clf_rew, animal, arguments, name):
-	feat_rew = clf_rew.feature_importances_
-
-	path = os.path.join(paths.path2Figures, animal, str(arguments['Function']), 
-						str(arguments['Init']), str(arguments['Rank']), name)
-	try:
-	    os.makedirs(path)
-	except:
-	    FileExistsError
-
-	max_feat_idx = np.argmax(feat_rew)
-	rois = list(factors[0][:,max_feat_idx])
-	best_rois = heapq.nlargest(10, enumerate(rois), key=lambda x: x[1])
+	best_rois = heapq.nlargest(15, enumerate(rois), key=lambda x: x[1])
 	best_indices = [best_rois[i][0] for i in range(len(best_rois))]
 	best_values = [best_rois[i][1] for i in range(len(best_rois))]
 
@@ -215,8 +178,25 @@ def best_rew_predictive_rois(factors, roi_tensor, clf_rew, animal, arguments, na
 	else:
 		plt.imshow(roi_map, vmin=0, vmax=np.max(best_values), cmap='hot')
 
-	plt.title('Importance : {}'.format(feat_rew[max_feat_idx]))
-	plt.savefig(os.path.join(path, 'Importance_map_rew_{}.png'.format(feat_rew[max_feat_idx])))
+	plt.title('Importance : {}'.format(feat_[max_feat_idx]))
+
+	try:
+		os.makedirs(os.path.join(path, 'Reduce_roi'))
+	except:
+		FileExistsError
+	
+	if spe == 'odor':
+		i = 0
+		while os.path.exists(os.path.join(path, 'Reduce_roi', 'Importance_map_odor_{}_{}_{:02d}.png'.format(feat_[max_feat_idx], name, i))):
+			i += 1
+
+		plt.savefig(os.path.join(path, 'Reduce_roi', 'Importance_map_odor_{}_{}_{:02d}.png'.format(feat_[max_feat_idx], name, i)))
+
+	elif spe == 'rew':
+		i = 0
+		while os.path.exists(os.path.join(path, 'Reduce_roi', 'Importance_map_rew_{}_{}_{:02d}.png'.format(feat_[max_feat_idx], name, i))):
+			i += 1
+
+		plt.savefig(os.path.join(path, 'Reduce_roi', 'Importance_map_rew_{}_{}_{:02d}.png'.format(feat_[max_feat_idx], name, i)))
 
 	return best_indices, reshaped_best_rois
-
