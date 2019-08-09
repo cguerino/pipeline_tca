@@ -1,3 +1,4 @@
+import os 
 import numpy as np 
 import tensorly as tl
 
@@ -5,8 +6,9 @@ from sklearn.utils import shuffle
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier
 
+import matplotlib.pyplot as plt 
 class TCA:
-	def __init__(self, function, rank, init, max_iteration=10000, verbose=False, random_state=None):
+	def __init__(self, function='non_negative_parafac', rank=6, init='random', max_iteration=10000, verbose=False, random_state=None, time_factor=None):
 		self.rank = rank
 		self.function = function
 		self.init = init
@@ -22,7 +24,11 @@ class TCA:
 		self.final_error = None
 
 		self.factors = None
+		self.time_factor = time_factor
 		self.nb_estim = None
+	def __add__(self):
+		# Room to improvments of pipelines
+		pass
 
 	def _initialize_factors(self, tensor, svd='numpy_svd', non_negative=False, custom=None):
 		rng = tl.random.check_random_state(self.random_state)
@@ -179,6 +185,25 @@ class TCA:
 		
 		return factors
 
+	def _make_map(slef, roi_tensor, neuron_factor):
+		"""Compute an image of the field of view with ROIs having different intensities
+			
+		Arguments:
+			roi_tensor {boolean 3d array} -- 3-dimensional array of shape (512, 512, N) 
+			where the slice (:,:,n) is a boolean mask for ROI n
+			neuron_factor {list} -- list of length N with neuron factors of a component
+			extracted from TCA
+		
+		Returns:
+			2d array - image -- (512, 512) array
+		"""
+		
+		roi_map = np.zeros([512, 512])
+		for n in range(roi_tensor.shape[2]):
+			roi_map += neuron_factor[n] * roi_tensor[:, :, n]
+			
+		return roi_map
+
 	def error(self):
 		return self.rec_errors
 
@@ -196,10 +221,10 @@ class TCA:
 			factors = self._non_negative_parafac(tensor)
 		
 		if self.function == 'fixed_parafac':
-			factors = self._non_negative_fixed_parafac(tensor, time_factor)
+			factors = self._fixed_parafac(tensor, self.time_factor)
 		
 		if self.function == 'non_negative_fixed_parafac':
-			factors = self._non_negative_fixed_parafac(tensor, time_factor)
+			factors = self._non_negative_fixed_parafac(tensor, self.time_factor)
 		
 		# Bring back factors array to cpu memory and convert it to numpy array
 		factors = [f.cpu().numpy() for f in factors]
@@ -222,3 +247,70 @@ class TCA:
 		self.score_rew = self.clf_rew.oob_score_
 
 		return self.score_odor, self.score_rew, self.clf_odor, self.clf_rew
+
+	def important_features_map(self, roi_tensor, path_fig):
+		feat_imp_odor = self.clf_odor.feature_importances_
+		feat_imp_rew = self.clf_rew.feature_importances_ 
+		
+		for i, f in enumerate([feat_imp_odor, feat_imp_rew]):
+			for r in range(self.factors[0].shape[1]):
+				roi_map = self._make_map(roi_tensor, self.factors[0][:, r])
+				if np.min(self.factors[0][:, r]) < 0:
+					plt.imshow(roi_map, vmin=0, vmax=np.max(self.factors[0]), cmap='coolwarm')
+				else:
+					plt.imshow(roi_map, vmin=0, vmax=np.max(self.factors[0]), cmap='hot')
+
+				plt.title('Importance : {}'.format(f[r]))
+				
+				try:
+					os.makedirs(os.path.join(path_fig, 'Maps'))
+				except:
+					FileExistsError				
+				
+				if not i:
+					spe, i = 'odor', 0
+					while os.path.exists(os.path.join(path_fig, 'Maps', 'Importance_map_{}_{}_{:02d}.png'.format(spe, f[r],  i))):
+						i += 1
+					plt.savefig(os.path.join(path_fig, 'Maps', 'Importance_map_{}_{}_{:02d}.png'.format(spe, f[r],  i)))
+
+				if i:
+					spe, i = 'rew', 0
+					while os.path.exists(os.path.join(path_fig, 'Maps', 'Importance_map_{}_{}_{:02d}.png'.format(spe, f[r],  i))):
+						i += 1
+					plt.savefig(os.path.join(path_fig, 'Maps', 'Importance_map_{}_{}_{:02d}.png'.format(spe, f[r],  i)))
+
+	def important_features_time(self, roi_tensor, path_fig, spe=None):
+		feat_imp_odor = self.clf_odor.feature_importances_
+		feat_imp_rew = self.clf_rew.feature_importances_
+
+		T = self.factors[1].shape[0]
+		shaded = [7, 9]
+		for i, f in enumerate([feat_imp_odor, feat_imp_rew]):
+			for r in range(self.factors[1].shape[1]):
+				## plot time factors as a lineplot
+				plt.plot(np.arange(1, T+1), self.factors[1][:, r], color='k', linewidth=2)
+				# arrange labels on x axis
+				plt.locator_params(nbins=T//30, steps=[1, 3, 5, 10], min_n_ticks=T//30)
+				# color the shaded region
+				plt.fill_betweenx([np.min(self.factors[1]), np.max(self.factors[1])+.01], 15*shaded[0],
+										  15*shaded[1], facecolor='red', alpha=0.5)
+
+				plt.title('Importance : {}'.format(f[r]))
+
+				try:
+					os.makedirs(os.path.join(path_fig, 'Time'))
+				except:
+					FileExistsError
+				
+				if not i:
+					spe, i = 'odor', 0
+					while os.path.exists(os.path.join(path_fig, 'Time', 'Importance_time_{}_{}_{:02d}.png'.format(spe, f[r], i))):
+						i += 1
+					plt.savefig(os.path.join(path_fig, 'Time', 'Importance_time_{}_{}_{:02d}.png'.format(spe, f[r], i)))
+				
+				if i:
+					spe, i = 'rew', 0
+					while os.path.exists(os.path.join(path_fig, 'Time', 'Importance_time_{}_{}_{:02d}.png'.format(spe, f[r], i))):
+						i += 1
+				else:
+					plt.savefig(os.path.join(path_fig, 'Time', 'Importance_time_{}_{}_{:02d}.png'.format(spe, f[r], i)))
