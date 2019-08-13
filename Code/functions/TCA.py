@@ -22,7 +22,7 @@ class TCA:
 	Model for performing TCA optimization and post-fitting analysis
 
 	Attributes
-	__________
+	----------
 	rank : int
 		Number of component in the TCA
 	function : str
@@ -59,14 +59,14 @@ class TCA:
 		Number of best predictive ROI kept
 
 	Constructors
-	____________
+	------------
 	__init__(self, function='non_negative_parafac', rank=6, init='random', max_iteration=10000, verbose=False, random_state=None, time_factor=None)
 		Initialize object and attributes
 	__add__(self, other)
 		For later use of pipelines
 
 	Methods
-	_______
+	-------
 	error()
 		Get record of errors during TCA optimization
 	detailed_error()
@@ -84,7 +84,7 @@ class TCA:
 		"""Constructor at initialization
 
 		Parameters
-		__________
+		----------
 		function : str, optional
 			Type of TCA algorithm (default is 'non_negative_parafac')
 		rank : int, optional
@@ -124,7 +124,7 @@ class TCA:
 		"""Initialize random or SVD-guided factors for TCA depending on TCA type
 
 		Parameters
-		__________
+		----------
 		tensor : torch.Tensor
 			The tensor of activity of N neurons, T timepoints and K trials of shape N, T, K
 		svd : str, optional
@@ -135,13 +135,13 @@ class TCA:
 			A flag used to specify which factor should be strictly positive for 'custom parafac' (default is None)
 
 		Raises
-		______
+		------
 		ValueError
 			If svd does not contain a valid SVD algorithm reference
 			If self.init variable does not contain a valid intialization method
 
 		Returns
-		_______
+		-------
 		list
 			List of initialized tensors
 		"""
@@ -189,19 +189,19 @@ class TCA:
 		"""Compute R2 score between all time factor curves
 		
 		Parameters
-		__________
+		----------
 		tensor : torch.Tensor
 			The tensor of activity of N neurons, T timepoints and K trials of shape N, T, K
 		factors : list
 			List of tensors, each one containing a factor
 
 		Raises
-		______
+		------
 		TypeError
 			If factors is alrerady in CPU memory
 
 		Returns
-		_______
+		-------
 		float
 			Mean of R2 scores
 		"""
@@ -223,7 +223,7 @@ class TCA:
 		"""Compute error of the TCA and check if convergence is reached each 25 iterations
 
 		Parameters
-		__________
+		----------
 		iteration : int
 			Current number of iterations of the TCA optimization algorithm
 		tensor : torch.Tensor
@@ -236,7 +236,7 @@ class TCA:
 			Verbose mode
 		
 		Returns
-		_______
+		-------
 		bool
 			A boolean that states if convergence is reached or not
 		"""
@@ -263,7 +263,7 @@ class TCA:
 		"""Compute a non-negative factor optimization for TCA
 
 		Parameters
-		__________
+		----------
 		tensor : torch.Tensor
 			The tensor of activity of N neurons, T timepoints and K trials of shape N, T, K
 		factors : list
@@ -272,7 +272,7 @@ class TCA:
 			Index of the factor to optimize
 
 		Returns
-		_______
+		-------
 		float
 			Number to which multiply the factor to for optimization
 
@@ -295,7 +295,7 @@ class TCA:
 		"""Compute a factor optimization for TCA
 
 		Parameters
-		__________
+		----------
 		tensor : torch.Tensor
 			The tensor of activity of N neurons, T timepoints and K trials of shape N, T, K
 		factors : list
@@ -306,7 +306,7 @@ class TCA:
 			Pseudo inverse matrix of the current factor
 
 		Returns
-		_______
+		-------
 		torch.Tensor
 			Optimized factor
 
@@ -323,14 +323,14 @@ class TCA:
 		"""Regular PARAFAC algorithm
 			
 		Parameters
-		__________
+		----------
 		tensor : torch.Tensor
 			The tensor of activity of N neurons, T timepoints and K trials of shape N, T, K
 		tol : float, optional
 			Threshold for convergence (default is 1e-10)
 
 		Returns
-		_______
+		-------
 		list
 			List of optimized factors
 		"""
@@ -349,14 +349,14 @@ class TCA:
 		"""Non-negative PARAFAC algorithm
 			
 		Parameters
-		__________
+		----------
 		tensor : torch.Tensor
 			The tensor of activity of N neurons, T timepoints and K trials of shape N, T, K
 		tol : float, optional
 			Threshold for convergence (default is 1e-7)
 
 		Returns
-		_______
+		-------
 		list
 			List of optimized factors
 		"""
@@ -376,7 +376,7 @@ class TCA:
 		"""Customized PARAFAC algorithm
 			
 		Parameters
-		__________
+		----------
 		tensor : torch.Tensor
 			The tensor of activity of N neurons, T timepoints and K trials of shape N, T, K
 		neg_fac : int, optional
@@ -385,7 +385,7 @@ class TCA:
 			Threshold for convergence (default is 1e-7)
 
 		Returns
-		_______
+		-------
 		list
 			List of optimized factors
 		"""
@@ -408,14 +408,14 @@ class TCA:
 		"""Non-negative PARAFAC algorithm with fixed time factor
 			
 		Parameters
-		__________
+		----------
 		tensor : torch.Tensor
 			The tensor of activity of N neurons, T timepoints and K trials of shape N, T, K
 		tol : float, optional
 			Threshold for convergence (default is 1e-7)
 
 		Returns
-		_______
+		-------
 		list
 			List of optimized factors
 		"""
@@ -438,7 +438,7 @@ class TCA:
 		"""PARAFAC algorithm with fixed time factor
 			
 		Parameters
-		__________
+		----------
 		tensor : torch.Tensor
 			The tensor of activity of N neurons, T timepoints and K trials of shape N, T, K
 		time_factor : list, optional
@@ -447,7 +447,7 @@ class TCA:
 			Threshold for convergence (default is 1e-7)
 
 		Returns
-		_______
+		-------
 		list
 			List of optimized factors
 		"""
@@ -469,14 +469,14 @@ class TCA:
 		"""Compute an image of the field of view with ROIs having different intensities
 			
 		Parameters
-		__________
+		----------
 		roi_tensor : array
 			3-dimensional array of shape (512, 512, N) where the slice (:,:,n) is a boolean mask for ROI n
 		neuron_factor : list} 
 			list of length N with neuron factors of a component extracted from TCA
 		
 		Returns
-		_______
+		-------
 		array
 			(512, 512) array image
 		"""
@@ -491,14 +491,14 @@ class TCA:
 		"""Perform linear sum assignment based on R2 scores
 		
 		Parameters
-		__________
+		----------
 		X : array
 			Factor to compare
 		Y: array
 			Factor to compare
 
 		Returns
-		_______
+		-------
 		array
 			Array rearranged
 		array
@@ -518,7 +518,7 @@ class TCA:
 		"""Load factors in order to generate global time factor
 		
 		Returns
-		_______
+		-------
 		list
 			List of factors
 		"""
@@ -548,12 +548,12 @@ class TCA:
 		"""Rearrange all loaded factors to calculate mean
 
 		Parameters
-		__________
+		----------
 		factors : list
 			List of factors to rearrange
 
 		Returns
-		_______
+		-------
 		list
 			List of rearranged factors for later plotting
 		list
@@ -578,7 +578,7 @@ class TCA:
 		"""Get record of errors during TCA optimization
 
 		Returns
-		_______
+		-------
 		list
 			Record of errors of the TCA optimization
 		"""
@@ -588,7 +588,7 @@ class TCA:
 		"""Get detailed information about error optimization and TCA algorith performance
 		
 		Returns
-		_______
+		-------
 		list
 			Record of errors of the TCA optimization
 		float
@@ -604,12 +604,12 @@ class TCA:
 		"""Fit the model following a given TCA method
 		
 		Parameters
-		__________
+		----------
 		tensor : torch.Tensor
 			The tensor of activity of N neurons, T timepoints and K trials of shape N, T, K
 
 		Returns
-		_______
+		-------
 		list
 			List of factors optimized
 		"""
@@ -638,14 +638,14 @@ class TCA:
 		"""Predict odor and reward metadata using a random forest classifier
 
 		Parameters
-		__________
+		----------
 		meta_df : pandas.DataFrame
 			Dataframe containing all the specifities about each trial
 		nb_estim : int, optional
 			Number of decision trees in the forest
 
 		Returns
-		_______
+		-------
 		float
 			Prediction score for odor data
 		float
@@ -674,7 +674,7 @@ class TCA:
 		"""Generate plots of TCA neuron factor components according to their predictive performance
 
 		Parameters
-		__________
+		----------
 		roi_tensor : array
 			3-dimensional array of shape (512, 512, N) where the slice (:,:,n) is a boolean mask for ROI n
 		path_fig : str
@@ -714,7 +714,7 @@ class TCA:
 		"""Generate plots of TCA time factor components according to their predictive performance
 
 		Parameters
-		__________
+		----------
 		roi_tensor : array
 			3-dimensional array of shape (512, 512, N) where the slice (:,:,n) is a boolean mask for ROI n
 		path_fig : str
@@ -759,7 +759,7 @@ class TCA:
 		"""Extract best predictive ROIs and plot them on a map
 
 		Parameters
-		__________
+		----------
 		roi_tensor : array
 			3-dimensional array of shape (512, 512, N) where the slice (:,:,n) is a boolean mask for ROI n
 		path_fig : str
@@ -815,7 +815,7 @@ class TCA:
 		"""Return an average time factor to fit TCA with inter-animal information
 
 		Returns
-		_______
+		-------
 		torch.Tensor
 			Tensor of factors that will be used to fix the TCA
 		"""
