@@ -8,9 +8,7 @@ import tensorly as tl
 from functions import data
 from functions import settings as sett 
 from functions import tca_utils as tca
-from functions import training as train
-from functions import paring as par
-from Classes import TCA as t
+from functions import TCA as t
 
 # tl.set_backend('pytorch')
 torch.set_default_tensor_type('torch.cuda.FloatTensor')
