@@ -9,6 +9,8 @@ from functions import data
 from functions import settings as sett 
 from functions import tca_utils as tca
 from functions import training as train
+from functions import paring as par
+from Classes import TCA as t
 
 # tl.set_backend('pytorch')
 torch.set_default_tensor_type('torch.cuda.FloatTensor')
@@ -27,6 +29,9 @@ animal = ar.get_animal()
 meta_df, roi_tensor, acti, norm_acti, smoothed_acti = data.load_processed_data_all(animal)
 meta_df, acti, norm_acti, smoothed_acti = data.select_data(meta_df, acti, norm_acti, smoothed_acti, selection)
 
+if args.smooth:
+	norm_acti = smoothed_acti
+
 name = ''.join(['_' + k + '-' + str(selection[k]) for k in selection if not selection[k] == None])[1:]
 
 path = os.path.join(paths.path2Output, animal, args.function, args.init, str(args.rank), name)
@@ -38,35 +43,18 @@ for p in [path, path_fig]:
 	except:
 		FileExistsError
 
-# Convert to pytorch tensor for computation 	
 norm_acti = torch.tensor(norm_acti)
+# room for improvments regarding fixed TCA : don't need to call par.
+model = t.TCA(function=args.function, rank=args.rank, init=args.init, verbose=args.verbose)
+factors = model.fit(norm_acti)
+rec_errors, *_ = model.detailed_error()
+score_odor, score_rew, clf_odor, clf_rew = model.predict(meta_df, 50)
+model.important_features_map(roi_tensor, path_fig)
+model.important_features_time(roi_tensor, path_fig)
 
-# Choose with which function compute TCA
-if args.function == 'custom_parafac':
-	if args.neg_fac != None:
-		factors, rec_errors = tca.custom_parafac(norm_acti, args.rank, n_iter_max=10000, tol=1e-07, 
-										  verbose=1, return_errors=True, neg_fac=args.neg_fac, init=args.init)
-elif args.function == 'parafac':
-	factors, rec_errors = tl.decomposition.parafac(norm_acti, args.rank, n_iter_max=10000, tol=1e-10, 
-										  verbose=1, return_errors=True, init=args.init)
-elif args.function == 'non_negative_parafac':
-	factors, rec_errors = tl.decomposition.non_negative_parafac(norm_acti, args.rank, n_iter_max=10000, tol=1e-07, 
-										  verbose=1, return_errors=True, init=args.init)
-elif args.function == 'test_rank':
-	factors, rec_errors = train.oob_error_rank(norm_acti, meta_df, args.init, animal, tca_sett, name)
-
-# Bring back factors array to cpu memory and convert it to numpy array
-factors_tensor = tl.kruskal_tensor.kruskal_to_tensor(factors).cpu().numpy()
-factors = [f.cpu().numpy() for f in factors]
-
-
-# Perform random forest classification
-score_odor, score_rew, clf_odor, clf_rew = train.rf_oob_score(factors, meta_df, 50)
-train.feature_importance_roi_maps(factors, roi_tensor, clf_odor, name, path_fig, spe='odor')
-train.feature_importance_time_factor(factors, roi_tensor, clf_odor, name, path_fig, spe='odor')
-
-train.feature_importance_roi_maps(factors, roi_tensor, clf_rew, name, path_fig, spe='rew')
-train.feature_importance_time_factor(factors, roi_tensor, clf_rew, name, path_fig,spe='rew')
+feat_odor, feat_rew = model.best_predictive_rois(roi_tensor, path_fig)
+model.fit(torch.tensor(norm_acti[feat_rew, :, :]))
+score_odor, score_rew, clf_odor, clf_rew = model.predict(meta_df)
 
 data.save_results(factors, rec_errors, score_odor, score_rew, name, path)
 
@@ -75,49 +63,6 @@ if args.verbose:
 	print("Reward prediction - Accuracy: %0.4f" % (score_rew))
 
 # Plot data and save it
-tca.factorplot(factors, roi_tensor, meta_df, animal, name, path_fig, color=meta_df['Reward Color'].tolist(), balance=True)
+tca.factorplot(factors, roi_tensor, meta_df, animal, name, path_fig, color=meta_df['Odor Color'].tolist(), balance=True)
 
 # tca.get_raw_traces(best_rois_idx, acti)
-
-
-######################### SECOND PASS ##############################
-name += '_reduce_roi'
-
-best_rois_idx, reshaped_best_rois = train.best_predictive_rois(factors, roi_tensor, clf_odor, name, path_fig, spe='odor')
-best_rew_idx, reshaped_best_rew = train.best_predictive_rois(factors, roi_tensor, clf_rew, name, path_fig, spe='rew')
-
-norm_acti = torch.tensor(norm_acti[best_rois_idx, :, :])
-
-# Choose with which function compute TCA
-if args.function == 'custom_parafac':
-	if args.neg_fac != None:
-		factors, rec_errors = tca.custom_parafac(norm_acti, args.rank, n_iter_max=10000, tol=1e-07, 
-										  verbose=1, return_errors=True, neg_fac=args.neg_fac, init=args.init)
-elif args.function == 'parafac':
-	factors, rec_errors = tl.decomposition.parafac(norm_acti, args.rank, n_iter_max=10000, tol=1e-10, 
-										  verbose=1, return_errors=True, init=args.init)
-elif args.function == 'non_negative_parafac':
-	factors, rec_errors = tl.decomposition.non_negative_parafac(norm_acti, args.rank, n_iter_max=10000, tol=1e-07, 
-										  verbose=1, return_errors=True, init=args.init)
-elif args.function == 'test_rank':
-	factors, rec_errors = train.oob_error_rank(norm_acti, meta_df, args.init, animal, tca_sett, name)
-
-# Bring back factors array to cpu memory and convert it to numpy array
-factors_tensor = tl.kruskal_tensor.kruskal_to_tensor(factors).cpu().numpy()
-factors = [f.cpu().numpy() for f in factors]
-
-
-# Perform random forest classification
-score_odor, score_rew, clf_odor, clf_rew = train.rf_oob_score(factors, meta_df, 50)
-roi_tensor = roi_tensor[:, :, best_rew_idx]
-
-if args.verbose: 
-	print("Odor prediction - Accuracy: %0.4f" % (score_odor))
-	print("Reward prediction - Accuracy: %0.4f" % (score_rew))
-
-# Plot data and save it
-tca.factorplot(factors, roi_tensor, meta_df, animal, name, path_fig, color=meta_df['Behavior Color'].tolist(), balance=True)
-
-# scores = tca.compute_r2_score(norm_acti, factors_tensor)
-
-

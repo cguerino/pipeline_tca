@@ -1,12 +1,22 @@
 import os 
+import heapq
+import torch
 import numpy as np 
 import tensorly as tl
 
 from sklearn.utils import shuffle
+from sklearn.metrics import r2_score
+from scipy.optimize import linear_sum_assignment
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier
 
+from functions import data
 import matplotlib.pyplot as plt 
+from functions import settings as sett 
+paths = sett.paths()
+param = sett.params()
+import scipy as sci
+
 class TCA:
 	"""
 	Model for performing TCA optimization and post-fitting analysis
@@ -25,8 +35,6 @@ class TCA:
 		Verbose mode
 	random_state : int
 		Random State seed
-	time_factor : list
-		List of factors containing time factor to use for fixed parafac or non-negative parafac
 	dimension : int
 		Number of factors in the TCA
 	epsilon : float
@@ -43,6 +51,12 @@ class TCA:
 		List of TCA factors
 	nb_estim : int
 		Number of decision trees estimator in the random forest
+	feat_odor : list
+		List of indexes of best predictive ROI for odor
+	feat_rew : list
+		List of best predictive ROI for rew
+	nb_feat : int
+		Number of best predictive ROI kept
 
 	Constructors
 	____________
@@ -66,7 +80,7 @@ class TCA:
 	important_features_time(roi_tensor, path_fig)
 		Generate plots of TCA time factor components according to their predictive performance
 	"""
-	def __init__(self, function='non_negative_parafac', rank=6, init='random', max_iteration=10000, verbose=False, random_state=None, time_factor=None):
+	def __init__(self, function='non_negative_parafac', rank=6, init='random', max_iteration=10000, verbose=False, random_state=None):
 		"""Constructor at initialization
 
 		Parameters
@@ -83,8 +97,6 @@ class TCA:
 			Verbose mode (default is False)
 		random_state : int, optional
 			Random state seed
-		time_factor : list, optional
-			List of factors containing time factor to use for fixed parafac or non-negative fixed parafac
 		"""
 		self.rank = rank
 		self.function = function
@@ -92,8 +104,6 @@ class TCA:
 		self.max_iteration = max_iteration
 		self.verbose = verbose
 		self.random_state = random_state
-		self.time_factor = time_factor
-
 		self.dimension = 3
 		self.epsilon = 1e-12
 		self.rec_errors = []
@@ -102,6 +112,9 @@ class TCA:
 		self.final_error = None
 		self.factors = None
 		self.nb_estim = None
+		self.feat_odor = None
+		self.feat_rew = None
+		self.nb_feat = None
 	def __add__(self, other):
 		# For later use of pipelines
 		pass
@@ -172,6 +185,39 @@ class TCA:
 			return factors
 		else:
 			raise ValueError('Initialization method "{}" not recognized'.format(self.init))
+	def __compute_r2_score(self, tensor, factors):
+		"""Compute R2 score between all time factor curves
+		
+		Parameters
+		__________
+		tensor : torch.Tensor
+			The tensor of activity of N neurons, T timepoints and K trials of shape N, T, K
+		factors : list
+			List of tensors, each one containing a factor
+
+		Raises
+		______
+		TypeError
+			If factors is alrerady in CPU memory
+
+		Returns
+		_______
+		float
+			Mean of R2 scores
+		"""
+		N, T, K = tensor.shape
+
+		tensor_traces = [tensor[n, :, k] for n in range(N) for k in range(K)]
+		tensor_traces = [t.cpu() for t in tensor_traces]
+		factors_traces = [factors[n, :, k] for n in range(N) for k in range(K)]
+		try:
+			factors_traces = [f.cpu() for f in factors_traces]
+		except:
+			TypeError
+
+		scores = [r2_score(tensor_traces[i], factors_traces[i]) for i in range(len(tensor_traces))]
+
+		return np.mean(scores)
 	
 	def __get_error(self, iteration, tensor, factors, tol=1e-7, verbose=False):
 		"""Compute error of the TCA and check if convergence is reached each 25 iterations
@@ -208,7 +254,7 @@ class TCA:
 			if abs(self.rec_errors[-2] - self.rec_errors[-1]) < tol:
 				if verbose:
 					print('converged in {} iterations.'.format(iteration))
-					print('R2 scores : {}'.format(tca.compute_r2_score(tensor, kruskal_to_tensor(factors))))
+					print('R2 scores : {}'.format(self.__compute_r2_score(tensor, tl.kruskal_tensor.kruskal_to_tensor(factors))))
 				return True
 			else:
 				return False
@@ -315,6 +361,7 @@ class TCA:
 			List of optimized factors
 		"""
 		factors = self.__initialize_factors(tensor, non_negative=True)
+		print(factors[0].shape)
 		for iteration in range(self.max_iteration):
 			for mode in range(self.dimension):
 				factors[mode] = factors[mode]* self.__factor_non_negative(tensor, factors, mode)
@@ -357,15 +404,13 @@ class TCA:
 	
 		return factors
 	
-	def __non_negative_fixed_parafac(self, tensor, time_factor, tol=1e-7):
+	def __non_negative_fixed_parafac(self, tensor, tol=1e-7):
 		"""Non-negative PARAFAC algorithm with fixed time factor
 			
 		Parameters
 		__________
 		tensor : torch.Tensor
 			The tensor of activity of N neurons, T timepoints and K trials of shape N, T, K
-		time_factor : list
-			List of factors from which to take time factor for fixing
 		tol : float, optional
 			Threshold for convergence (default is 1e-7)
 
@@ -374,13 +419,14 @@ class TCA:
 		list
 			List of optimized factors
 		"""
+		time_factor = self.get_fixed_factor()
 		factors = self.__initialize_factors(tensor, self.rank, self.init)
 		factors[1] = time_factor
 
 		for iteration in range(self.max_iteration):
 			for mode in range(self.dimension):
 				if mode != 1:
-					factors[mode] = factors[mode] * self.__factor_non_negative(self, tensor, factors, mode)
+					factors[mode] = factors[mode] * self.__factor_non_negative(tensor, factors, mode)
 
 			if (iteration % 25 == 0 or iteration % 25 == 1) and iteration > 1:
 				if self.__get_error(iteration, tensor, factors, tol, self.verbose):
@@ -388,14 +434,14 @@ class TCA:
 		
 		return factors
 	
-	def __fixed_parafac(self, tensor, time_factor, tol=1e-7):
+	def __fixed_parafac(self, tensor, tol=1e-7):
 		"""PARAFAC algorithm with fixed time factor
 			
 		Parameters
 		__________
 		tensor : torch.Tensor
 			The tensor of activity of N neurons, T timepoints and K trials of shape N, T, K
-		time_factor : list
+		time_factor : list, optional
 			List of factors from which to take time factor for fixing
 		tol : float, optional
 			Threshold for convergence (default is 1e-7)
@@ -405,12 +451,13 @@ class TCA:
 		list
 			List of optimized factors
 		"""
+		time_factor = self.get_fixed_factor()
 		factors = self.__initialize_factors(tensor, self.rank, self.init)
 		factors[1] = time_factor
 		for iteration in range(self.max_iteration):
 			for mode in range(self.dimension):
 				if mode != 1:
-					factors[mode] = factors[mode] * self.__factor(self, tensor, factors, mode)
+					factors[mode] = factors[mode] * self.__factor(tensor, factors, mode)
 
 			if (iteration % 25 == 0 or iteration % 25 == 1) and iteration > 1:
 				if self.__get_error(iteration, tensor, factors, tol, self.verbose):
@@ -418,7 +465,7 @@ class TCA:
 		
 		return factors
 
-	def __make_map(slef, roi_tensor, neuron_factor):
+	def __make_map(self, roi_tensor, neuron_factor):
 		"""Compute an image of the field of view with ROIs having different intensities
 			
 		Parameters
@@ -439,6 +486,93 @@ class TCA:
 			roi_map += neuron_factor[n] * roi_tensor[:, :, n]
 			
 		return roi_map
+
+	def __paring_r2(self, X, Y):
+		"""Perform linear sum assignment based on R2 scores
+		
+		Parameters
+		__________
+		X : array
+			Factor to compare
+		Y: array
+			Factor to compare
+
+		Returns
+		_______
+		array
+			Array rearranged
+		array
+			Array rearranged
+		"""
+		paring_matrix = np.empty(shape=(X.shape[1], X.shape[1]))
+		
+		for i, x in enumerate(X.T):
+			for j, y in enumerate(Y.T):
+				paring_matrix[i][j] = r2_score(x, y)
+
+		row_ind, col_ind = linear_sum_assignment(paring_matrix)
+
+		return X.T[row_ind].T, Y.T[col_ind].T
+
+	def __load_factors(self):
+		"""Load factors in order to generate global time factor
+		
+		Returns
+		_______
+		list
+			List of factors
+		"""
+		factors = []
+		for a in range(12, 15):
+			for e in [1]:
+				animal = param.animal_list[a]
+				meta_df, roi_tensor, acti, norm_acti, smoothed_acti = data.load_processed_data_all(animal)
+				days = set(meta_df.loc[meta_df['Experiment Class'] == e, 'Day'].tolist())
+				for d in days:
+					path = os.path.join(paths.path2Output, animal, 'non_negative_parafac', 'random', '6', 'Day-[{}]_Experiment Class-[{}]'.format(d, e),
+									   'factorsDay-[{}]_Experiment Class-[{}]_00.npy'.format(d, e))
+					factor = np.load(path)
+				    #Compute norms along columns for each factor matrix
+					norms = [sci.linalg.norm(f, axis=0) for f in factor]
+
+					# Multiply norms across all modes
+					lam = sci.multiply.reduce(norms) ** (1/3)
+
+					# Update factors
+					factor = [f * (lam / fn) for f, fn in zip(factor, norms)]
+					
+					factors.append(factor)
+		return factors
+
+	def __rearrange_factors(self, factors):
+		"""Rearrange all loaded factors to calculate mean
+
+		Parameters
+		__________
+		factors : list
+			List of factors to rearrange
+
+		Returns
+		_______
+		list
+			List of rearranged factors for later plotting
+		list
+			List of mean rearranged factor use for computation
+		"""
+		rearranged_factors = []
+		for i, f in enumerate(factors):
+			if i == 0:
+				f1 = f[1]
+				rearranged_factors.append(f1) 
+			else:
+				f1, f2 = self.__paring_r2(f1, f[1])
+				rearranged_factors.append(f2)
+				rearranged_factors[0] = f1
+
+		mean_factor = np.mean(np.array(rearranged_factors), axis=0)
+
+
+		return rearranged_factors, mean_factor
 
 	def error(self):
 		"""Get record of errors during TCA optimization
@@ -489,10 +623,10 @@ class TCA:
 			factors = self.__non_negative_parafac(tensor)
 		
 		if self.function == 'fixed_parafac':
-			factors = self.__fixed_parafac(tensor, self.time_factor)
+			factors = self.__fixed_parafac(tensor)
 		
 		if self.function == 'non_negative_fixed_parafac':
-			factors = self.__non_negative_fixed_parafac(tensor, self.time_factor)
+			factors = self.__non_negative_fixed_parafac(tensor)
 		
 		# Bring back factors array to cpu memory and convert it to numpy array
 		factors = [f.cpu().numpy() for f in factors]
@@ -620,3 +754,74 @@ class TCA:
 						i += 1
 				else:
 					plt.savefig(os.path.join(path_fig, 'Time', 'Importance_time_{}_{}_{:02d}.png'.format(spe, f[r], i)))
+
+	def best_predictive_rois(self, roi_tensor, path_fig, nb_feat=15):
+		"""Extract best predictive ROIs and plot them on a map
+
+		Parameters
+		__________
+		roi_tensor : array
+			3-dimensional array of shape (512, 512, N) where the slice (:,:,n) is a boolean mask for ROI n
+		path_fig : str
+			Path where the figures should be saved
+		nb_feat : int, optional
+			Number of best ROIs plotted
+		"""
+		feat_odor = self.clf_odor.feature_importances_
+		feat_rew = self.clf_rew.feature_importances_
+		self.nb_feat = nb_feat
+		for k, feat_ in enumerate([feat_odor, feat_rew]):
+			max_feat_idx = np.argmax(feat_)
+			rois = list(self.factors[0][:,max_feat_idx])
+			best_rois = heapq.nlargest(nb_feat, enumerate(rois), key=lambda x: x[1])
+			best_indices = [best_rois[i][0] for i in range(len(best_rois))]
+			best_values = [best_rois[i][1] for i in range(len(best_rois))]
+
+			reshaped_best_rois = [0]*len(self.factors[0][:, max_feat_idx])
+			for i, j in zip(best_indices, best_values):
+				reshaped_best_rois[i] = j
+
+			roi_map = self.__make_map(roi_tensor, reshaped_best_rois)
+			if np.min(best_values) < 0:
+				plt.imshow(roi_map, vmin=0, vmax=np.max(best_values), cmap='coolwarm')
+			else:
+				plt.imshow(roi_map, vmin=0, vmax=np.max(best_values), cmap='hot')
+
+			plt.title('Importance : {}'.format(feat_[max_feat_idx]))
+
+			try:
+				os.makedirs(os.path.join(path_fig, 'Reduce_roi'))
+			except:
+				FileExistsError
+			
+			if not k:
+				i = 0
+				while os.path.exists(os.path.join(path_fig, 'Reduce_roi', 'Importance_map_odor_{}_{:02d}.png'.format(feat_[max_feat_idx], i))):
+					i += 1
+
+				plt.savefig(os.path.join(path_fig, 'Reduce_roi', 'Importance_map_odor_{}_{:02d}.png'.format(feat_[max_feat_idx], i)))
+				self.feat_odor = best_indices
+			if k:
+				i = 0
+				while os.path.exists(os.path.join(path_fig, 'Reduce_roi', 'Importance_map_rew_{}_{:02d}.png'.format(feat_[max_feat_idx], i))):
+					i += 1
+
+				plt.savefig(os.path.join(path_fig, 'Reduce_roi', 'Importance_map_rew_{}_{:02d}.png'.format(feat_[max_feat_idx], i)))
+				self.feat_rew = best_indices
+		
+		return self.feat_odor, self.feat_rew
+
+	def get_fixed_factor(self):
+		"""Return an average time factor to fit TCA with inter-animal information
+
+		Returns
+		_______
+		torch.Tensor
+			Tensor of factors that will be used to fix the TCA
+		"""
+		factors = self.__load_factors()
+		rearranged_factors, mean_factor = self.__rearrange_factors(factors)
+
+		return torch.tensor(mean_factor)
+
+
