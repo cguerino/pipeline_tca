@@ -10,21 +10,29 @@ paths = sett.paths()
 
 
 def load_data(animal, selection, verbose=False):
-	""" Load raw data for a given animal depending on the selection
-	made through the CLI. 
-	Arguments:
-		animal {string} -- name of the animal
-		selection {dict} -- selection preferences passed through the CLI. {'Selection':value}
+	""" Load raw data for a given animal depending on the selection made through the CLI. 
 	
-	Keyword Arguments:
-		verbose {bool} -- enable verbose mode
+	Arguments
+	---------
+	animal : string
+		Name of the animal
+	selection : dict
+		Selection preferences passed through the CLI. {'Selection':value}
+	verbose : bool, optional
+		Verbose mode
 	
-	Returns:
-		meta_df {DataFrame} --  metadata for each selected trial
-		roi_tensor {array} -- mask of ROIs
-		acti {array} -- activation data dependnig on ROI, time and trial
-		f0 {array} -- baseline fluorescence 
-		trials_of_interest {list} -- list of trials matching with selection criteria
+	Returns
+	-------
+	DataFrame
+		Metadata for each selected trial
+	array
+		Mask of ROIsroi_tensor {array} -- mask of ROIs
+	array
+		Activation data depending on ROI, time and trial
+	array
+		Baseline fluorescence
+	list
+		List of trials matching with selection criteria
 	"""
 	path_raw = os.path.join(paths.path2Data, animal, 'Raw Data')
 	
@@ -51,21 +59,31 @@ def load_data(animal, selection, verbose=False):
 
 def save_data(interpolated_acti, norm_acti, smoothed_acti, flag_roi, trials_to_drop, roi_tensor, meta_df, animal, name, arguments, selection):
 	""" Save preprocessed data in order to save time for different computations. 
-	Arguments:
-		interpolated_acti {array} -- corrected activation tensor, all NaNs removed
-		flag_roi {list} -- roi removed beacause of NaNs
-		drop_trial {list} -- trials dropped because they didn't match selection criteria
-		roi_tensor {array} -- mask of ROIs
-		meta_df {DataFrame} --  metadata for each selected trial
-		animal {string} -- name of the animal
-		name {string} -- random name of the current running simulation
-		arguments {dict} -- simulation configuration. {'Parameter': value}
-		selection {dict} -- selection preferences passed through the CLI. {'Selection':value}
-
-	Keyword Arguments:
-		None
-	Returns:
-		None
+	
+	Arguments
+	---------
+	interpolated_acti : array 
+		Corrected activation tensor, all NaNs removed
+	norm_acti : array 
+		Normalized activity data dependnig on ROI, time and trial
+	smoothed_acti : array 
+		Smoothed and normalized activity data dependnig on ROI, time and trial
+	flag_roi : list 
+		Roi removed beacause of NaNs
+	trials_to_drop : list 
+		Trials to drop because they didn't match selection criteria
+	roi_tensor : array -
+		Mask of ROIs
+	meta_df : DataFrame 
+		Metadata for each selected trial
+	animal : string 
+		Name of the animal
+	name : string 
+		Random name of the current running simulation
+	arguments : dict 
+		Simulation configuration. {'Parameter': value}
+	selection : dict 
+		Selection preferences passed through the CLI. {'Selection':value}
 	"""
 
 	configuration = pd.concat([pd.DataFrame(arguments, index=[0]), pd.DataFrame(selection, index=[0])], axis=1)
@@ -88,21 +106,24 @@ def save_data(interpolated_acti, norm_acti, smoothed_acti, flag_roi, trials_to_d
 
 def save_data_all(interpolated_acti, norm_acti, smoothed_acti, flag_roi, roi_tensor, meta_df, animal, arguments):
 	""" Save preprocessed data in order to save time for different computations. 
-	Arguments:
-		interpolated_acti {array} -- corrected activation tensor, all NaNs removed
-		flag_roi {list} -- roi removed beacause of NaNs
-		drop_trial {list} -- trials dropped because they didn't match selection criteria
-		roi_tensor {array} -- mask of ROIs
-		meta_df {DataFrame} --  metadata for each selected trial
-		animal {string} -- name of the animal
-		name {string} -- random name of the current running simulation
-		arguments {dict} -- simulation configuration. {'Parameter': value}
-		selection {dict} -- selection preferences passed through the CLI. {'Selection':value}
-
-	Keyword Arguments:
-		None
-	Returns:
-		None
+	Arguments
+	---------
+	interpolated_acti : array 
+		Corrected activation tensor, all NaNs removed
+	norm_acti : array 
+		Normalized activity data dependnig on ROI, time and trial
+	smoothed_acti : array 
+		Smoothed and normalized activity data dependnig on ROI, time and trial
+	flag_roi : list 
+		Roi removed beacause of NaNs
+	roi_tensor : array
+		Mask of ROIs
+	meta_df : DataFrame 
+		Metadata for each selected trial
+	animal : string 
+		Name of the animal
+	arguments : dict 
+		Simulation configuration. {'Parameter': value}
 	"""
 
 	configuration = pd.DataFrame(arguments, index=[0])
@@ -123,18 +144,27 @@ def save_data_all(interpolated_acti, norm_acti, smoothed_acti, flag_roi, roi_ten
 
 def load_processed_data(animal, name, arguments):
 	""" Load preprocessed data
-	Arguments:
-		animal {string} -- name of the animal
-		name {string} -- random name of the current running simulation
-		arguments {dict} -- simulation configuration. {'Parameter': value}
-	
-	Keyword:
-		None
+	Arguments
+	---------
+	animal : string 
+		Name of the animal
+	name : string 
+		Random name of the current running simulation
+	arguments : dict -
+		Simulation configuration. {'Parameter': value}
 
-	Returns:
-		meta_df {DataFrame} --  metadata for each selected trial
-		roi_tensor {array} -- mask of ROIs
-		acti {array} -- activation data dependnig on ROI, time and trial	
+	Returns
+	-------
+	meta_df : DataFrame
+		Metadata for each selected trial
+	roi_tensor : array 
+		Mask of ROIs
+	acti : array 
+		Activity data dependnig on ROI, time and trial
+	norm_acti : array 
+		Normalized activity data dependnig on ROI, time and trial
+	smoothed_acti : array 
+		Smoothed and normalized activity data dependnig on ROI, time and trial	
 	"""
 	path = os.path.join(paths.path2Output, animal, str(arguments['Function']), 
 						str(arguments['Init']), str(arguments['Rank']), name)
@@ -151,20 +181,21 @@ def load_processed_data(animal, name, arguments):
 def load_processed_data_all(animal):
 	""" Load preprocessed data
 	Arguments:
-		animal {string} -- name of the animal
-		name {string} -- random name of the current running simulation
+	animal : string 
+		Name of the animal
 	
-	Keyword:
-		None
-
-	Returns:
-		meta_df {DataFrame} --  metadata for each selected trial
-		roi_tensor {array} -- mask of ROIs
-		acti {array} -- activation data dependnig on ROI, time and trial
-		norm_acti {array} -- activation data normalized dependnig on ROI, time and trial	
-
-		acti {array} -- activation data normalized and smoothed, depending on ROI, time and trial	
-	
+	Returns
+	-------
+	meta_df : DataFrame
+		Metadata for each selected trial
+	roi_tensor : array 
+		Mask of ROIs
+	acti : array 
+		Activity data dependnig on ROI, time and trial
+	norm_acti : array 
+		Normalized activity data dependnig on ROI, time and trial
+	smoothed_acti : array 
+		Smoothed and normalized activity data dependnig on ROI, time and tria	
 	"""
 	path = os.path.join(paths.path2Output, animal, 'Preprocessed Data')
 	
@@ -196,29 +227,29 @@ def select_data(meta_df, acti, norm_acti, smoothed_acti, selection):
 def save_results(factors, rec_errors, scores_odor, scores_rew, name, path):
 	""" Save results of the TCA and random forests
 
-	Arguments:
-		factors {array} -- neuron, time and trial factors from TCA
-		rec_errors {list} -- reconstruction error during iterations of the TCA
-		scores_odor {float} -- prediction score of the odor presented
-		scores_rew {float} -- prediction score of the animal behavior
-		animal {string} -- name of the animal
-		name {string} -- random name of the current running simulation
-
-	Keywords:
-		None
-
-	Returns:
-		None
+	Arguments
+	---------
+	factors : array 
+			Neuron, time and trial factors from TCA
+	rec_errors : list 
+			Reconstruction error during iterations of the TCA
+	scores_odor : float 
+			Prediction score of the odor presented
+	scores_rew : float 
+			Prediction score of the animal behavior
+	path : string 
+			Path to save data
+	name : string 
+			Random name of the current running simulation
 	"""
 	i = 0
 	while os.path.exists(os.path.join(path, 'factors{}_{:02d}.npy').format(name, i)):
 		i += 1
-	print(i)
 	
-	np.save(os.path.join(path, 'factors{}_{:02d}').format(name, i), factors)
-	np.save(os.path.join(path, 'errors{}_{:02d}').format(name, i), rec_errors)
-	np.save(os.path.join(path, 'scores_odor{}_{:02d}').format(name, i), scores_odor)
-	np.save(os.path.join(path, 'scores_rew{}_{:02d}').format(name, i), scores_rew)
+	np.save(os.path.join(path, 'factors{}_{:02d}.npy'.format(name, i)), factors)
+	np.save(os.path.join(path, 'errors{}_{:02d}.npy'.format(name, i)), rec_errors)
+	np.save(os.path.join(path, 'scores_odor{}_{:02d}.npy'.format(name, i)), scores_odor)
+	np.save(os.path.join(path, 'scores_rew{}_{:02d}.npy'.format(name, i)), scores_rew)
 
 def check_number_files(path):
 	i = 0
