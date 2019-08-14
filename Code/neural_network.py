@@ -226,3 +226,4 @@ def train_model_acti():
 		print('Model predicted performance : {} %'.format(100*np.mean([scores[i][2] for i in range(len(scores))])))
 		print('Mouse Performance : {} %'.format(list(scores[0][1])[0]))
 
+train_model()

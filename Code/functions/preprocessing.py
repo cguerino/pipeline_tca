@@ -132,3 +132,20 @@ def day(acti, meta_df):
 
 	return acti
 
+def curve_smoothing(x, smooth_factor=0.2):
+	plt.style.use('fivethirtyeight')
+	xs = np.linspace(min(x), max(x), len(x))
+	spl = UnivariateSpline(xs, x)
+	spl.set_smoothing_factor(smooth_factor)
+	
+	return spl(xs)
+
+def get_raw_traces(rois, acti):
+	fig, axs = plt.subplots(5, 2)
+	idx = np.arange(10).reshape(5, 2)
+	plt.style.use('fivethirtyeight')
+	plt.close()
+	for i in range(5):
+		for j in range(2):
+			plt.plot(acti[rois[idx[i, j]], :, :])
+	plt.show()

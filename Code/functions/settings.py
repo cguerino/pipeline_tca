@@ -50,6 +50,8 @@ class arguments():
 							help='Rank of the TCA')
 		parser.add_argument('--function', '-f', type=str, default='non_negative_parafac', 
 							help='TCA function to use: parafac, non_negative_parafac, custom_parafac')
+		parser.add_argument('--second_tca', '-stca', type=str, default='non_negative_parafac', 
+							help='TCA function to use: parafac, non_negative_parafac, custom_parafac')
 		parser.add_argument('--neg_fac', '-nf', type=str, default=0, 
 							help='Factor of the TCA which is allowed to be negative')
 		parser.add_argument('--tmp', '-tmp', action='store_true', 
@@ -66,6 +68,7 @@ class arguments():
 							help='Generate TSNE figure')
 		parser.add_argument('--correlation', '-corr', action='store_true', 
 							help='Generate hierarchical correlation clstering figure between two trials')
+		
 		# Select relevant data for processing
 		parser.add_argument('--Block', '-B', type=int, nargs='*', default=None, 
 							help='Blocks to choose from. All blocks are taken by default')

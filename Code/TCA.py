@@ -7,7 +7,6 @@ import tensorly as tl
 
 from functions import data
 from functions import settings as sett 
-from functions import tca_utils as tca
 from functions import TCA as t
 
 # tl.set_backend('pytorch')
@@ -41,17 +40,15 @@ for p in [path, path_fig]:
 	except:
 		FileExistsError
 
-norm_acti = torch.tensor(norm_acti)
-# room for improvments regarding fixed TCA : don't need to call par.
-model = t.TCA(function=args.function, rank=args.rank, init=args.init, verbose=args.verbose)
-factors = model.fit(norm_acti)
-rec_errors, *_ = model.detailed_error()
+model = t.TCA(function=args.function, rank=args.rank, init=args.init, verbose=args.verbose, roi_tensor=roi_tensor)
+factors = model.fit(torch.tensor(norm_acti))
+model.factorplot(meta_df, animal, name, path_fig, color=meta_df['Odor Color'].tolist(), balance=True, order=True)
 score_odor, score_rew, clf_odor, clf_rew = model.predict(meta_df, 50)
 model.important_features_map(roi_tensor, path_fig)
 model.important_features_time(roi_tensor, path_fig)
 
 feat_odor, feat_rew = model.best_predictive_rois(roi_tensor, path_fig)
-model.fit(torch.tensor(norm_acti[feat_rew, :, :]))
+model.fit(torch.tensor(norm_acti[feat_odor, :, :]))
 score_odor, score_rew, clf_odor, clf_rew = model.predict(meta_df)
 
 data.save_results(factors, rec_errors, score_odor, score_rew, name, path)
@@ -60,7 +57,3 @@ if args.verbose:
 	print("Odor prediction - Accuracy: %0.4f" % (score_odor))
 	print("Reward prediction - Accuracy: %0.4f" % (score_rew))
 
-# Plot data and save it
-tca.factorplot(factors, roi_tensor, meta_df, animal, name, path_fig, color=meta_df['Odor Color'].tolist(), balance=True)
-
-# tca.get_raw_traces(best_rois_idx, acti)

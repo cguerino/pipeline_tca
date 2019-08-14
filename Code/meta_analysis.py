@@ -2,7 +2,7 @@ import os
 import numpy as np 
 
 from functions import analysis as an 
-from functions import data
+from functions import data 
 from functions import settings as sett 
 
 params = sett.params()
@@ -28,7 +28,7 @@ meta_df, roi_tensor, acti, norm_acti, smoothed_acti = data.load_processed_data_a
 meta_df, acti, norm_acti, smoothed_acti = data.select_data(meta_df, acti, norm_acti, smoothed_acti, selection)
 
 if args.similarity:
-	sim = an.similarity_kruskal(fac1, fac2)
+	sim = an.kruskal_align(fac1, fac2)
 	if args.verbose: print(sim)
 
 if args.TSNE:
