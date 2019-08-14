@@ -13,6 +13,7 @@ from sklearn.ensemble import RandomForestClassifier
 from functions import data
 import matplotlib.pyplot as plt 
 from functions import settings as sett 
+
 paths = sett.paths()
 param = sett.params()
 import scipy as sci
@@ -75,12 +76,16 @@ class TCA:
 		Fit the model following a given TCA method
 	predict(meta_df, nb_estim=50)
 		Predict odor and reward metadata using a random forest classifier
-	important_features_map(roi_tensor, path_fig)
+	important_features_map(path_fig)
 		Generate plots of TCA neuron factor components according to their predictive performance
-	important_features_time(roi_tensor, path_fig)
+	important_features_time(path_fig)
 		Generate plots of TCA time factor components according to their predictive performance
+	best_predictive_rois(self, path_fig, nb_feat=15)
+		Extract best predictive ROIs and plot them on a map
+	factorplot(self, meta_df, animal, name, path, balance=True, color='k', shaded=None, order=False)
+		Display the factors extracted with TCA
 	"""
-	def __init__(self, function='non_negative_parafac', rank=6, init='random', max_iteration=10000, verbose=False, random_state=None):
+	def __init__(self, function='non_negative_parafac', rank=6, init='random',  max_iteration=10000, verbose=False, random_state=None, roi_tensor=None):
 		"""Constructor at initialization
 
 		Parameters
@@ -97,6 +102,8 @@ class TCA:
 			Verbose mode (default is False)
 		random_state : int, optional
 			Random state seed
+		roi_tensor : array
+			3-dimensional array of shape (512, 512, N) where the slice (:,:,n) is a boolean mask for ROI n
 		"""
 		self.rank = rank
 		self.function = function
@@ -104,6 +111,7 @@ class TCA:
 		self.max_iteration = max_iteration
 		self.verbose = verbose
 		self.random_state = random_state
+		self.roi_tensor = roi_tensor
 		self.dimension = 3
 		self.epsilon = 1e-12
 		self.rec_errors = []
@@ -465,13 +473,11 @@ class TCA:
 		
 		return factors
 
-	def __make_map(self, roi_tensor, neuron_factor):
+	def __make_map(self, neuron_factor):
 		"""Compute an image of the field of view with ROIs having different intensities
 			
 		Parameters
 		----------
-		roi_tensor : array
-			3-dimensional array of shape (512, 512, N) where the slice (:,:,n) is a boolean mask for ROI n
 		neuron_factor : list} 
 			list of length N with neuron factors of a component extracted from TCA
 		
@@ -482,8 +488,8 @@ class TCA:
 		"""
 		
 		roi_map = np.zeros([512, 512])
-		for n in range(roi_tensor.shape[2]):
-			roi_map += neuron_factor[n] * roi_tensor[:, :, n]
+		for n in range(self.roi_tensor.shape[2]):
+			roi_map += neuron_factor[n] * self.roi_tensor[:, :, n]
 			
 		return roi_map
 
@@ -532,7 +538,7 @@ class TCA:
 					path = os.path.join(paths.path2Output, animal, 'non_negative_parafac', 'random', '6', 'Day-[{}]_Experiment Class-[{}]'.format(d, e),
 									   'factorsDay-[{}]_Experiment Class-[{}]_00.npy'.format(d, e))
 					factor = np.load(path)
-				    #Compute norms along columns for each factor matrix
+					#Compute norms along columns for each factor matrix
 					norms = [sci.linalg.norm(f, axis=0) for f in factor]
 
 					# Multiply norms across all modes
@@ -670,13 +676,11 @@ class TCA:
 
 		return self.score_odor, self.score_rew, self.clf_odor, self.clf_rew
 
-	def important_features_map(self, roi_tensor, path_fig):
+	def important_features_map(self, path_fig):
 		"""Generate plots of TCA neuron factor components according to their predictive performance
 
 		Parameters
 		----------
-		roi_tensor : array
-			3-dimensional array of shape (512, 512, N) where the slice (:,:,n) is a boolean mask for ROI n
 		path_fig : str
 			Path where the figures should be saved
 		"""
@@ -685,7 +689,7 @@ class TCA:
 		
 		for i, f in enumerate([feat_imp_odor, feat_imp_rew]):
 			for r in range(self.factors[0].shape[1]):
-				roi_map = self.__make_map(roi_tensor, self.factors[0][:, r])
+				roi_map = self.__make_map(self.factors[0][:, r])
 				if np.min(self.factors[0][:, r]) < 0:
 					plt.imshow(roi_map, vmin=0, vmax=np.max(self.factors[0]), cmap='coolwarm')
 				else:
@@ -710,13 +714,11 @@ class TCA:
 						i += 1
 					plt.savefig(os.path.join(path_fig, 'Maps', 'Importance_map_{}_{}_{:02d}.png'.format(spe, f[r],  i)))
 
-	def important_features_time(self, roi_tensor, path_fig):
+	def important_features_time(self, path_fig):
 		"""Generate plots of TCA time factor components according to their predictive performance
 
 		Parameters
 		----------
-		roi_tensor : array
-			3-dimensional array of shape (512, 512, N) where the slice (:,:,n) is a boolean mask for ROI n
 		path_fig : str
 			Path where the figures should be saved
 		"""
@@ -755,13 +757,11 @@ class TCA:
 				else:
 					plt.savefig(os.path.join(path_fig, 'Time', 'Importance_time_{}_{}_{:02d}.png'.format(spe, f[r], i)))
 
-	def best_predictive_rois(self, roi_tensor, path_fig, nb_feat=15):
+	def best_predictive_rois(self, path_fig, nb_feat=15):
 		"""Extract best predictive ROIs and plot them on a map
 
 		Parameters
 		----------
-		roi_tensor : array
-			3-dimensional array of shape (512, 512, N) where the slice (:,:,n) is a boolean mask for ROI n
 		path_fig : str
 			Path where the figures should be saved
 		nb_feat : int, optional
@@ -781,7 +781,7 @@ class TCA:
 			for i, j in zip(best_indices, best_values):
 				reshaped_best_rois[i] = j
 
-			roi_map = self.__make_map(roi_tensor, reshaped_best_rois)
+			roi_map = self.__make_map(reshaped_best_rois)
 			if np.min(best_values) < 0:
 				plt.imshow(roi_map, vmin=0, vmax=np.max(best_values), cmap='coolwarm')
 			else:
@@ -823,5 +823,242 @@ class TCA:
 		rearranged_factors, mean_factor = self.__rearrange_factors(factors)
 
 		return torch.tensor(mean_factor)
+
+	def __give_order(self):
+		"""Return the order in which components should be plotted
+		
+		Returns
+		-------
+		list
+			List of indexes
+		"""
+
+		onset = []
+
+		for r in range(1, self.rank):
+			comp = self.factors[1][:, r]
+			thres = 2 * np.std(comp) + comp[0]
+
+			t = 0
+			while comp[t] < thres:
+				if t < 284:
+					t += 1
+				else:
+					break
+			onset.append(t)
+
+		order = []
+		ti = np.copy(onset)
+		onset.sort()
+
+		for t in onset:
+			i = 0
+			while t != ti[i]:
+				i += 1
+			order.append(i)
+
+		return order
+
+	def __ord_fact(self, order):
+		"""Re-order factors given indices
+
+		Arguments
+		---------
+		order : list
+			List of indexes in order
+
+		Returns
+		-------
+			List
+				Factors ordered
+		"""
+
+		ord_factors = []
+
+		for factor in factors:
+			ord_factor = np.zeros_like(factor)
+			ord_factor[:, 0] = factor[:, 0]
+			for i, o in enumerate(order):
+				ord_factor[:, i+1] = factor[:, o+1]
+			ord_factors.append(ord_factor)
+
+		return ord_factors
+	
+	def factorplot(self, meta_df, animal, name, path, balance=True, color='k', shaded=None, order=False):
+		"""Display the factors extracted with TCA
+		
+		The TCA extracted factors are represented in 3 columns and as many rows as there are components.
+		On the first column neuron factors are represented on the ROI map.
+		On the second column temporal factors are represented.
+		On the third column trial factors are represented.
+		
+		Arguments
+		---------
+		meta_df : pandas.DataFrame
+			Dataframe containing all the specifities about each trial
+		animal : string 
+			Name of the animal
+		name : string
+			String to append to filename
+		balance : bool, optional
+			whether factors be normalized over modes and components (default : True)
+		color : list
+			Color code for each trial factor (default : 'k')
+		shaded : list
+			Interval in seconds to be shaded in temporal factor (default : None)
+		order : bool
+			Wether components should be ordered by activity onset (default : False)
+		path : string
+			Destination folder for saving (default : None)
+		"""
+			
+		# whether or not factors columns should be normalized to unit norm
+		if balance:
+			# Compute norms along columns for each factor matrix
+			# norms is a list of 3 arrays of length rank
+			norms = [sci.linalg.norm(f, axis=0) for f in self.factors]
+
+			# Multiply norms across all modes to have 1 norm per component
+			# lam is a list of length rank
+			lam = sci.multiply.reduce(norms) ** (1/3)
+
+			# Update factors to normalize each columns to unit norm
+			self.factors = [f * (lam / fn) for f, fn in zip(self.factors, norms)]
+		
+		# wheter or not components should be ordered by activity onset
+		if order:
+			self.factors = self.__ord_fact(self.factors, self.__give_order(self.factors))
+
+		# rank is the number of components of TCA - as well as the number of columns in factor matrices
+		rank = self.factors[0].shape[1]
+		# T is the number of timeframes for each trial, usually 285
+		T = self.factors[1].shape[0]
+		# K is the number of trials
+		K = self.factors[2].shape[0]
+
+
+		limit_block = [[meta_df[meta_df['Block'] == i].index.tolist()[0], meta_df[meta_df['Block'] == i].index.tolist()[-1]] for i in set(meta_df['Block'].tolist())]
+		limit_day = [meta_df[meta_df['Day'] == i].index.tolist()[-1] for i in set(meta_df['Day'].tolist())]
+		learn_color = [meta_df['Performance Color'].iloc[x[0]] for x in limit_block]
+		top = np.max(self.factors[2])
+
+		# by default the shaded interval for trial factors
+		# corresponds to the odor presentation
+		if shaded is None:
+			# interval in seconds, 1 second = 15 timeframes
+			shaded = [7, 9]
+		
+		# initiate the plotting object
+		fig, axarr = plt.subplots(rank, 3, sharex='col', figsize=(15, rank*3))
+
+		# for each of the component r
+		for r in range(rank):
+
+			## plot neuron factors on the ROI map
+			# generate the image with ROI binary tensor and neuron factors
+
+			roi_map = self.__make_map(self.factors[0][:, r])
+			# plot as an image, beware normalized colormap
+			axarr[r, 0].imshow(roi_map, vmin=0, vmax=np.max(self.factors[0]), cmap='hot')
+
+			## plot time factors as a lineplot
+			axarr[r, 1].plot(np.arange(1, T+1), self.factors[1][:, r], color='k', linewidth=2)
+			# arrange labels on x axis
+			axarr[r, 1].locator_params(nbins=T//30, steps=[1, 3, 5, 10], min_n_ticks=T//30)
+			# color the shaded region
+			axarr[r, 1].fill_betweenx([np.min(self.factors[1]), np.max(self.factors[1])+.01], 15*shaded[0],
+									  15*shaded[1], facecolor='red', alpha=0.5)
+
+			## plot trial factors as a scatter plot
+			axarr[r, 2].scatter(np.arange(1, K+1), self.factors[2][:, r], c=color)
+			# arrange labels on x axis
+			axarr[r, 2].locator_params(nbins=K//20, steps=[1, 2, 5, 10], min_n_ticks=K//20)
+			
+			# add information from behaviorgram if needed
+
+			# iterate over blocks
+			for i, block in enumerate(limit_block):
+				# color a region over trial factors corresponding to a given block
+				# the color denotes the learning score for the given block
+				axarr[r, 2].fill_betweenx([1.05 * top, 1.25 * top], block[0], block[1], 
+										  facecolor=learn_color[i], alpha=1)
+			# iterate over days
+			for limit in limit_day:
+				# plot a black line for day shift between learning score colors
+				axarr[r, 2].axvline(limit, 0.75, 1, linewidth=2, color='black')
+			
+			# for mode 1 and 2 (i.e temporal and trial factors)
+			for i in [1, 2]:
+
+				# format axes, remove spines for all components
+				axarr[r, i].spines['top'].set_visible(False)
+				axarr[r, i].spines['right'].set_visible(False)
+
+				# remove xticks on all but bottom row, to keep legend on this row
+				if r != rank-1:
+					plt.setp(axarr[r, i].get_xticklabels(), visible=False)
+			
+			# remove axes, spines and labels for neuron factors
+			axarr[r, 0].tick_params(axis='both', which='both', bottom=False, top=False,
+									labelbottom=False, right=False, left=False, labelleft=False)
+
+		# set titles for top row and legend for bottom row
+		axarr[0, 0].set_title('Neuron Factors', {'fontsize': 'x-large', 'fontweight' : 'roman'})
+		axarr[0, 1].set_title('Temporal Factors', {'fontsize': 'x-large', 'fontweight' : 'roman'})
+		axarr[0, 2].set_title('Trial Factors', {'fontsize': 'x-large', 'fontweight' : 'roman'})
+		
+		# set label for bottom row trial factors
+		axarr[rank-1, 0].set_xlabel('ROI map', {'fontsize': 'large', 'fontweight' : 'bold',
+												'verticalalignment' : 'top'})
+
+		# generate time index in seconds for temporal factors
+		time_index = list(np.arange(0, T//15 + 1, 2))
+		# insert another 0 to preserve length
+		time_index.insert(0, 1)
+		# set label for bottom row temporal factors
+		axarr[rank-1, 1].set_xlabel('Time (s)', {'fontsize': 'large', 'fontweight' : 'bold'})
+		# set ticks labels for bottom row temporal factors
+		axarr[rank-1, 1].set_xticklabels(time_index)
+		
+		# generate trial index for trial factors
+		trial_index = list(np.arange(0, K//20 + 2))
+		# insert another 0 to preserve length
+		trial_index.insert(0, 1)
+		# set label for bottom row trial factors
+		axarr[rank-1, 2].set_xlabel('Block', {'fontsize': 'large', 'fontweight' : 'bold'})
+		# set ticks labels for bottom trial factors 
+		axarr[rank-1, 2].set_xticklabels(trial_index)
+		
+		## link y-axes within columns
+		# iterate over modes
+		for i in range(3):
+			# get amplitudes for each component
+			yl = [a.get_ylim() for a in axarr[:, i]]
+			# get maximum amplitudes, global minimum and maximum for factors
+			y0, y1 = min([y[0] for y in yl]), max([y[1] for y in yl])
+			# set same plotting intervals across components 
+			_ = [a.set_ylim((y0, y1)) for a in axarr[:, i]]
+
+		## format y-ticks
+		# iterate over components
+		for r in range(rank):
+			# iterate over modes
+			for i in range(3):
+				# limit to two labels, minimum and maximum for y axis
+				axarr[r, i].set_ylim(np.round(axarr[r, i].get_ylim(), 2))
+				# set ticks accordingly
+				axarr[r, i].set_yticks([0, np.round(axarr[r, i].get_ylim(), 2)[1]])
+
+		# make so that plots are tightly presented
+		plt.tight_layout()
+
+		# display and save figure
+		
+		i = 0
+		while os.path.exists(os.path.join(path, 'factorplot{}_{:02d}.png'.format(name, i))):
+			i += 1
+
+		plt.savefig(os.path.join(path, 'factorplot_{}_{:02d}.png'.format(name, i)))
+
 
 
