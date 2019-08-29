@@ -7,7 +7,6 @@ import pandas as pd
 import tensorly as tl
 from functions import plot
 from functions import data
-from functions import training as train
 from functions import preprocessing as prepro
 from functions import settings as sett 
 from functions import tca_utils as tca

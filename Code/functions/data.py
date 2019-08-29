@@ -208,6 +208,7 @@ def load_processed_data_all(animal):
 	return meta_df, roi_tensor, acti, norm_acti, smoothed_acti
 
 def select_data(meta_df, acti, norm_acti, smoothed_acti, selection):
+	# Cannot do that because it affects the second selection during TCA
 	for param in selection:
 		if selection[param] != None:
 			meta_df = meta_df[meta_df[param].isin(selection[param])]
@@ -256,4 +257,4 @@ def check_number_files(path):
 	while os.path.exists(path):
 		i += 1
 
-	return i
+	return i 

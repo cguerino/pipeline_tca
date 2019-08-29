@@ -3,7 +3,6 @@ import torch
 import random
 import numpy as np
 import pandas as pd
-import tensorly as tl
 
 from functions import data
 from functions import settings as sett 
@@ -26,8 +25,8 @@ animal = ar.get_animal()
 meta_df, roi_tensor, acti, norm_acti, smoothed_acti = data.load_processed_data_all(animal)
 meta_df, acti, norm_acti, smoothed_acti = data.select_data(meta_df, acti, norm_acti, smoothed_acti, selection)
 
-if args.smooth:
-	norm_acti = smoothed_acti
+# if args.smooth:
+# 	norm_acti = smoothed_acti
 
 name = ''.join(['_' + k + '-' + str(selection[k]) for k in selection if not selection[k] == None])[1:]
 
@@ -40,16 +39,24 @@ for p in [path, path_fig]:
 	except:
 		FileExistsError
 
-model = t.TCA(function=args.function, rank=args.rank, init=args.init, verbose=args.verbose, roi_tensor=roi_tensor)
+model = t.TCA(function=args.function, rank=args.rank, init=args.init, verbose=args.verbose, roi_tensor=roi_tensor, ff=args.fixed_factor)
 factors = model.fit(torch.tensor(norm_acti))
-model.factorplot(meta_df, animal, name, path_fig, color=meta_df['Odor Color'].tolist(), balance=True, order=True)
-score_odor, score_rew, clf_odor, clf_rew = model.predict(meta_df, 50)
-model.important_features_map(roi_tensor, path_fig)
-model.important_features_time(roi_tensor, path_fig)
+model.factorplot(meta_df, animal, name, path_fig, color=meta_df['Odor Color'].tolist(), balance=True, order=False)
+rec_errors = model.error()
 
-feat_odor, feat_rew = model.best_predictive_rois(roi_tensor, path_fig)
+
+score_odor, score_rew, clf_odor, clf_rew = model.predict(meta_df, 50)
+
+model.important_features_map(path_fig)
+model.important_features_time(path_fig)
+
+feat_odor, feat_rew, reshaped_odor, reshaped_rew = model.best_predictive_rois(path_fig)
+
+model.roi_tensor = roi_tensor[:, :, feat_odor]
 model.fit(torch.tensor(norm_acti[feat_odor, :, :]))
-score_odor, score_rew, clf_odor, clf_rew = model.predict(meta_df)
+model.factorplot(meta_df, animal, name + 'reduce_roi', path_fig, color=meta_df['Odor Color'].tolist(), balance=True, order=False)
+
+# score_odor, score_rew, clf_odor, clf_rew = model.predict(meta_df)
 
 data.save_results(factors, rec_errors, score_odor, score_rew, name, path)
 

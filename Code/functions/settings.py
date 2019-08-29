@@ -3,9 +3,10 @@ import argparse
 
 class paths():
 	def __init__(self):
-		self.path2Data = os.path.join(os.sep, 'X:' + os.sep, 'Antonin', 'Pipeline',  'Data')
-		self.path2Output = os.path.join(os.sep, 'X:' + os.sep, 'Antonin', 'Pipeline', 'Output')
+		self.path2Data = os.path.join(os.sep, 'C:' + os.sep, 'Users', 'Antonin', 'Documents',  'Data')
+		self.path2Output = os.path.join(os.sep, 'C:' + os.sep, 'Users', 'Antonin', 'Documents',  'Output')
 		self.path2Figures = os.path.join(os.sep, 'X:' + os.sep, 'Antonin', 'Pipeline', 'Figures')
+		self.path2fixed_factors = os.path.join(os.sep, 'X:' + os.sep, 'Antonin', 'Pipeline', 'Data', 'fixed_factors')
 
 class params():
 	def __init__(self):
@@ -18,12 +19,6 @@ class params():
 				            'yellow',  'pink', 'cyan', 'purple', 'grey',
 				            'grey', 'grey', 'orange', 'green', 'red',
 				            'black', 'blue', 'yellow', 'pink']
-
-		self.convert_beh = {'MISS': 0, 'HIT':1, 'FA': 2, 'CR':3}
-		self.convert_odo = {'40EB 60AA':0, '60EB 40AA': 1, 'Air2': 2, 'CINEOLE': 3, 
-							'ETHYL TIGLATE': 4, 'Min-Limonen': 5, 'VALDEHYDE': 6, 
-							'Air1': 7, 'HEXANONE': 8, '55EB 45AA': 9, 'BUTYRIC ACID': 10, 
-							'45EB 55AA': 11}
 
 class arguments():
 
@@ -38,7 +33,7 @@ class arguments():
 							help='Cut-off for consecutive NaNs in a trial')
 		parser.add_argument('--thres', '-th', type=int, default=80, 
 							help='Threshold for non_consecutive NaNs in a trial')
-		parser.add_argument('--animal', '-a', type=int, default=15, 
+		parser.add_argument('--animal', '-a', nargs='*', type=int, default=15, 
 							help='Choose animal to process')
 		parser.add_argument('--tol', '-tl', type=int, default=15, 
 							help='Tolerance for data')
@@ -68,6 +63,8 @@ class arguments():
 							help='Generate TSNE figure')
 		parser.add_argument('--correlation', '-corr', action='store_true', 
 							help='Generate hierarchical correlation clstering figure between two trials')
+		parser.add_argument('--fixed_factor', '-ff', type=str, default=None, 
+							help='Name of fixed_prafac npy file in fixed_factors folder to use for fixed parafac')
 		
 		# Select relevant data for processing
 		parser.add_argument('--Block', '-B', type=int, nargs='*', default=None, 
@@ -91,6 +88,13 @@ class arguments():
 		parser.add_argument('--Performance', '-P', type=int, nargs='*', default=None, 
 							help='Performances to choose from. All performances are taken by default')
 
+		# Select relevant data for fixed parafac
+		parser.add_argument('--fExpclass', '-fE', type=int, nargs='*', default=None, 
+							help='Experiment classes to choose from. All experiment classes are taken by default')
+		parser.add_argument('--fanimal', '-fa', type=int, nargs='*', default=None, 
+							help='Animal number for fixed parafac')
+		parser.add_argument('--name', '-fn', type=str, default=None, 
+							help='Name of fixed_prafac npy file')
 		self.args = parser.parse_args()
 
 	def get_arguments(self):
@@ -134,7 +138,16 @@ class arguments():
 		return self.preprocess_sett
 
 	def get_animal(self):
-		self.animal = params().animal_list[self.args.animal]
+		self.animal = params().animal_list[self.args.animal[0]]
 
 		return self.animal
+
+	def get_fixed_args(self):
+		self.fixed_selection = {
+		'Animal': self.args.fanimal,
+		'Experiment Class': self.args.fExpclass
+		}
+
+		return self.fixed_selection
+
 

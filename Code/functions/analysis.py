@@ -109,7 +109,7 @@ def TSNE_trials(acti, meta_df, name, path, dataset='factors'):
 
 	for day in days:
 		trials_of_interest = meta_df[meta_df.Day == day].index.tolist()
-		colors = meta_df.loc[trials_of_interest, 'Performance Color'].tolist()
+		colors = meta_df.loc[trials_of_interest, 'Behavior Color'].tolist()
 		
 		if dataset == 'factors':
 			X = factors[2][trials_of_interest, :]
@@ -117,7 +117,7 @@ def TSNE_trials(acti, meta_df, name, path, dataset='factors'):
 			X = acti[:, :, trials_of_interest]
 			X = np.swapaxes(X, 0, 2).reshape(X.shape[2], X.shape[0]*X.shape[1])
 		
-		tsne = TSNE(perplexity=10, learning_rate=200)
+		tsne = TSNE(perplexity=50, learning_rate=100)
 		X_embedded = tsne.fit_transform(X)
 		
 		x = [i[0] for i in X_embedded]

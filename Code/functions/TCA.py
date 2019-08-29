@@ -3,6 +3,7 @@ import heapq
 import torch
 import numpy as np 
 import tensorly as tl
+import tensorly.random
 
 from sklearn.utils import shuffle
 from sklearn.metrics import r2_score
@@ -13,6 +14,7 @@ from sklearn.ensemble import RandomForestClassifier
 from functions import data
 import matplotlib.pyplot as plt 
 from functions import settings as sett 
+from fixed_factor import get_fixed_factor
 
 paths = sett.paths()
 param = sett.params()
@@ -85,7 +87,7 @@ class TCA:
 	factorplot(self, meta_df, animal, name, path, balance=True, color='k', shaded=None, order=False)
 		Display the factors extracted with TCA
 	"""
-	def __init__(self, function='non_negative_parafac', rank=6, init='random',  max_iteration=10000, verbose=False, random_state=None, roi_tensor=None):
+	def __init__(self, function='non_negative_parafac', rank=6, init='random',  max_iteration=10000, verbose=False, random_state=None, roi_tensor=None, ff=None):
 		"""Constructor at initialization
 
 		Parameters
@@ -104,6 +106,8 @@ class TCA:
 			Random state seed
 		roi_tensor : array
 			3-dimensional array of shape (512, 512, N) where the slice (:,:,n) is a boolean mask for ROI n
+		ff : str
+			Fixed factor filename
 		"""
 		self.rank = rank
 		self.function = function
@@ -112,6 +116,7 @@ class TCA:
 		self.verbose = verbose
 		self.random_state = random_state
 		self.roi_tensor = roi_tensor
+		self.ff = ff
 		self.dimension = 3
 		self.epsilon = 1e-12
 		self.rec_errors = []
@@ -153,7 +158,7 @@ class TCA:
 		list
 			List of initialized tensors
 		"""
-		rng = tl.random.check_random_state(self.random_state)
+		rng = tensorly.random.check_random_state(self.random_state)
 		if self.init == 'random':
 			if custom:
 				factors = [tl.tensor(rng.random_sample((tensor.shape[i], self.rank))*2 - 1, **tl.context(tensor)) for i in range(self.dimension)]
@@ -369,7 +374,6 @@ class TCA:
 			List of optimized factors
 		"""
 		factors = self.__initialize_factors(tensor, non_negative=True)
-		print(factors[0].shape)
 		for iteration in range(self.max_iteration):
 			for mode in range(self.dimension):
 				factors[mode] = factors[mode]* self.__factor_non_negative(tensor, factors, mode)
@@ -427,7 +431,13 @@ class TCA:
 		list
 			List of optimized factors
 		"""
-		time_factor = self.get_fixed_factor()
+		if not self.ff:
+			time_factor = get_fixed_factor('non_negative_parafac')
+			print('test')
+		else:
+			time_factor = torch.tensor(np.load(os.path.join(paths.path2fixed_factors, self.ff)))
+
+		
 		factors = self.__initialize_factors(tensor, self.rank, self.init)
 		factors[1] = time_factor
 
@@ -459,7 +469,7 @@ class TCA:
 		list
 			List of optimized factors
 		"""
-		time_factor = self.get_fixed_factor()
+		time_factor = get_fixed_factor('parafac')
 		factors = self.__initialize_factors(tensor, self.rank, self.init)
 		factors[1] = time_factor
 		for iteration in range(self.max_iteration):
@@ -492,93 +502,6 @@ class TCA:
 			roi_map += neuron_factor[n] * self.roi_tensor[:, :, n]
 			
 		return roi_map
-
-	def __paring_r2(self, X, Y):
-		"""Perform linear sum assignment based on R2 scores
-		
-		Parameters
-		----------
-		X : array
-			Factor to compare
-		Y: array
-			Factor to compare
-
-		Returns
-		-------
-		array
-			Array rearranged
-		array
-			Array rearranged
-		"""
-		paring_matrix = np.empty(shape=(X.shape[1], X.shape[1]))
-		
-		for i, x in enumerate(X.T):
-			for j, y in enumerate(Y.T):
-				paring_matrix[i][j] = r2_score(x, y)
-
-		row_ind, col_ind = linear_sum_assignment(paring_matrix)
-
-		return X.T[row_ind].T, Y.T[col_ind].T
-
-	def __load_factors(self):
-		"""Load factors in order to generate global time factor
-		
-		Returns
-		-------
-		list
-			List of factors
-		"""
-		factors = []
-		for a in range(12, 15):
-			for e in [1]:
-				animal = param.animal_list[a]
-				meta_df, roi_tensor, acti, norm_acti, smoothed_acti = data.load_processed_data_all(animal)
-				days = set(meta_df.loc[meta_df['Experiment Class'] == e, 'Day'].tolist())
-				for d in days:
-					path = os.path.join(paths.path2Output, animal, 'non_negative_parafac', 'random', '6', 'Day-[{}]_Experiment Class-[{}]'.format(d, e),
-									   'factorsDay-[{}]_Experiment Class-[{}]_00.npy'.format(d, e))
-					factor = np.load(path)
-					#Compute norms along columns for each factor matrix
-					norms = [sci.linalg.norm(f, axis=0) for f in factor]
-
-					# Multiply norms across all modes
-					lam = sci.multiply.reduce(norms) ** (1/3)
-
-					# Update factors
-					factor = [f * (lam / fn) for f, fn in zip(factor, norms)]
-					
-					factors.append(factor)
-		return factors
-
-	def __rearrange_factors(self, factors):
-		"""Rearrange all loaded factors to calculate mean
-
-		Parameters
-		----------
-		factors : list
-			List of factors to rearrange
-
-		Returns
-		-------
-		list
-			List of rearranged factors for later plotting
-		list
-			List of mean rearranged factor use for computation
-		"""
-		rearranged_factors = []
-		for i, f in enumerate(factors):
-			if i == 0:
-				f1 = f[1]
-				rearranged_factors.append(f1) 
-			else:
-				f1, f2 = self.__paring_r2(f1, f[1])
-				rearranged_factors.append(f2)
-				rearranged_factors[0] = f1
-
-		mean_factor = np.mean(np.array(rearranged_factors), axis=0)
-
-
-		return rearranged_factors, mean_factor
 
 	def error(self):
 		"""Get record of errors during TCA optimization
@@ -698,7 +621,7 @@ class TCA:
 				plt.title('Importance : {}'.format(f[r]))
 				
 				try:
-					os.makedirs(os.path.join(path_fig, 'Maps'))
+					os.makedirs(os.path.join(path_fig, 'Maps')) 
 				except:
 					FileExistsError				
 				
@@ -707,12 +630,14 @@ class TCA:
 					while os.path.exists(os.path.join(path_fig, 'Maps', 'Importance_map_{}_{}_{:02d}.png'.format(spe, f[r],  i))):
 						i += 1
 					plt.savefig(os.path.join(path_fig, 'Maps', 'Importance_map_{}_{}_{:02d}.png'.format(spe, f[r],  i)))
+					plt.clf()
 
 				if i:
 					spe, i = 'rew', 0
 					while os.path.exists(os.path.join(path_fig, 'Maps', 'Importance_map_{}_{}_{:02d}.png'.format(spe, f[r],  i))):
 						i += 1
 					plt.savefig(os.path.join(path_fig, 'Maps', 'Importance_map_{}_{}_{:02d}.png'.format(spe, f[r],  i)))
+					plt.clf()
 
 	def important_features_time(self, path_fig):
 		"""Generate plots of TCA time factor components according to their predictive performance
@@ -749,6 +674,7 @@ class TCA:
 					while os.path.exists(os.path.join(path_fig, 'Time', 'Importance_time_{}_{}_{:02d}.png'.format(spe, f[r], i))):
 						i += 1
 					plt.savefig(os.path.join(path_fig, 'Time', 'Importance_time_{}_{}_{:02d}.png'.format(spe, f[r], i)))
+					plt.clf()
 				
 				if i:
 					spe, i = 'rew', 0
@@ -756,6 +682,7 @@ class TCA:
 						i += 1
 				else:
 					plt.savefig(os.path.join(path_fig, 'Time', 'Importance_time_{}_{}_{:02d}.png'.format(spe, f[r], i)))
+					plt.clf()
 
 	def best_predictive_rois(self, path_fig, nb_feat=15):
 		"""Extract best predictive ROIs and plot them on a map
@@ -795,12 +722,13 @@ class TCA:
 				FileExistsError
 			
 			if not k:
-				i = 0
+				i = 0  
 				while os.path.exists(os.path.join(path_fig, 'Reduce_roi', 'Importance_map_odor_{}_{:02d}.png'.format(feat_[max_feat_idx], i))):
 					i += 1
 
 				plt.savefig(os.path.join(path_fig, 'Reduce_roi', 'Importance_map_odor_{}_{:02d}.png'.format(feat_[max_feat_idx], i)))
 				self.feat_odor = best_indices
+				self.reshaped_best_rois_odor = reshaped_best_rois
 			if k:
 				i = 0
 				while os.path.exists(os.path.join(path_fig, 'Reduce_roi', 'Importance_map_rew_{}_{:02d}.png'.format(feat_[max_feat_idx], i))):
@@ -808,8 +736,11 @@ class TCA:
 
 				plt.savefig(os.path.join(path_fig, 'Reduce_roi', 'Importance_map_rew_{}_{:02d}.png'.format(feat_[max_feat_idx], i)))
 				self.feat_rew = best_indices
+				self.reshaped_best_rois_rew = reshaped_best_rois
+
+		plt.clf()
 		
-		return self.feat_odor, self.feat_rew
+		return self.feat_odor, self.feat_rew, self.reshaped_best_rois_odor, self.reshaped_best_rois_rew
 
 	def get_fixed_factor(self):
 		"""Return an average time factor to fit TCA with inter-animal information
@@ -1059,6 +990,7 @@ class TCA:
 			i += 1
 
 		plt.savefig(os.path.join(path, 'factorplot_{}_{:02d}.png'.format(name, i)))
+		plt.clf()
 
 
 
