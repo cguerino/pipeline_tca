@@ -2,7 +2,6 @@ import os
 import torch
 import random
 import numpy as np
-import pandas as pd
 
 from functions import data
 from functions import settings as sett 
